@@ -195,7 +195,7 @@ toBloodhoundJson ts =
     "]"
     ]
   where
-    -- decodeBase64EncodedText is defined in add-form.hamlet
+    -- decodeBase64EncodedText is defined in static/hledger.js
     b64wrap = ("decodeBase64EncodedText(\""<>) . (<>"\")") .
 #if MIN_VERSION_base64(1,0,0)
       extractBase64 .
