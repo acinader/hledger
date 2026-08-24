@@ -114,7 +114,8 @@ import System.Console.CmdArgs.Explicit
 import System.Console.CmdArgs.Explicit as CmdArgsWithoutName hiding (Name)
 import System.Environment
 import System.Exit
-import System.Process (system)
+import System.Info (os)
+import System.Process (rawSystem, system)
 import Text.Megaparsec (optional, takeWhile1P, eof)
 import Text.Megaparsec.Char (char)
 import Text.Printf
@@ -463,11 +464,15 @@ main = handleExit $ withGhcDebug' $ do
           (cliargsbeforesep, cliargsaftersep) = breakAtFirstSeparator cliargswithoutcmd
           addonargs0 = supportedgenargsfromconf <> confcmdargs0 <> aliasargs <> cliargsbeforesep
           addonargs = dropCliSpecificOpts addonargs0 <> cliargsaftersep
-          shellcmd = printf "%s-%s %s" progname cmdname (unwords $ map quoteForCommandLine addonargs) :: String
+          addonexe = printf "%s-%s" progname cmdname :: String
+          shellcmd = unwords $ map quoteForCommandLine $ addonexe : addonargs
         dbgio "addon command selected" cmdname
         dbgio "addon command arguments" addonargs
         dbg1IO "running addon" shellcmd
-        system shellcmd >>= exitWith
+        -- Pass the arguments as an argv list, so that they reach the addon exactly as
+        -- written, without shell quoting getting in the way. Except on Windows, where
+        -- we go through the shell, which is what runs .bat and other script addons there.
+        (if os == "mingw32" then system shellcmd else rawSystem addonexe addonargs) >>= exitWith
 
     -- deprecated command found
     -- cmdname == "convert" = error' (modeHelp oldconvertmode)

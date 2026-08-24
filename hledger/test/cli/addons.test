@@ -51,6 +51,14 @@ argv: [-n]
 $  PATH=$PATH:addons hledger argvdump -n
 argv:
 
+# ** 12. Empty arguments are preserved.
+$  PATH=$PATH:addons hledger argvdump --sort ""
+argv: [--sort] []
+
+# ** 13. Arguments needing shell quoting are preserved.
+$  PATH=$PATH:addons hledger argvdump 'a b' '$x'
+argv: [a b] [$x]
+
 
 
 #  ** 0. having no addons shouldn't break the commands list (how to test ?)
