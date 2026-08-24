@@ -43,6 +43,14 @@ argv: [--someunknownflag=x]
 $  PATH=$PATH:addons hledger argvdump -- foo -- bar
 argv: [foo] [--] [bar]
 
+# ** 10. After a --, hledger's own cli-specific options are passed to the addon.
+$  PATH=$PATH:addons hledger argvdump -- -n
+argv: [-n]
+
+# ** 11. Before a --, they are still hledger's.
+$  PATH=$PATH:addons hledger argvdump -n
+argv:
+
 
 
 #  ** 0. having no addons shouldn't break the commands list (how to test ?)

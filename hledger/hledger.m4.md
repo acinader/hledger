@@ -237,6 +237,11 @@ Or you can run them with hledger, like built-in commands: `hledger ui --watch`.
 In this case hledger's config file will be used, so you can set custom options for the addon there.
 (Before hledger 1.50, an `--` argument was needed before addon options, but not any more.)
 
+Arguments written after the command name are passed on to the add-on unchanged,
+except for the options specific to the `hledger` CLI (`--conf`, `--no-conf`, `-n`), which hledger consumes.
+To send one of those to the add-on instead, write it after a `--` argument: `hledger ui -- -n`.
+hledger consumes only that first `--`; later ones are passed on like any other argument.
+
 # Options
 
 Run `hledger -h` to see general command line help.

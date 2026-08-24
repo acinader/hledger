@@ -454,13 +454,15 @@ main = handleExit $ withGhcDebug' $ do
     -- The first "--" argument, which sometimes must be used in the command line
     -- to hide addon-specific opts from hledger's cmdargs parsing, is consumed here;
     -- any later "--" arguments are the addon's, and are passed on.
+    -- Anything written after that first "--" is passed on untouched, including
+    -- args which would otherwise look like hledger's own cli-specific options.
     -- Arguments written before the command name, and general opts from the config file,
     -- are not passed since we can't be sure they're supported.
     | isaddoncmd -> do
         let
           (cliargsbeforesep, cliargsaftersep) = breakAtFirstSeparator cliargswithoutcmd
-          addonargs0 = supportedgenargsfromconf <> confcmdargs0 <> aliasargs <> cliargsbeforesep <> cliargsaftersep
-          addonargs = dropCliSpecificOpts addonargs0
+          addonargs0 = supportedgenargsfromconf <> confcmdargs0 <> aliasargs <> cliargsbeforesep
+          addonargs = dropCliSpecificOpts addonargs0 <> cliargsaftersep
           shellcmd = printf "%s-%s %s" progname cmdname (unwords $ map quoteForCommandLine addonargs) :: String
         dbgio "addon command selected" cmdname
         dbgio "addon command arguments" addonargs
