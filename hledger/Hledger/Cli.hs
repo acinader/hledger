@@ -328,12 +328,13 @@ main = handleExit $ withGhcDebug' $ do
       | isaddoncmd = []
       | otherwise  = dropUnsupportedOpts effectivemode confothergenargs
     excludedgenargsfromconf = confothergenargs \\ supportedgenargsfromconf
-    confcmdargs
+    confcmdargs0
       | null cmdname = []
-      | otherwise =
-          confLookup cmdname conf
-          & replaceNumericFlags
-          & if isaddoncmd then ("--":) else id
+      | otherwise    = confLookup cmdname conf & replaceNumericFlags
+    -- For an addon, prepend a "--" so that cmdargs parses the addon's own flags as
+    -- positional args rather than rejecting them. This separator is for parsing only;
+    -- it is not part of the args passed on to the addon.
+    confcmdargs = confcmdargs0 & if isaddoncmd then ("--":) else id
 
   when (isJust mconffile) $ do
     unless (null confdroppedgenargs) $
@@ -450,16 +451,15 @@ main = handleExit $ withGhcDebug' $ do
     -- 6.5. external addon command found - run it,
     -- passing any cli arguments written after the command name
     -- and any command-specific opts from the config file.
-    -- Any "--" arguments, which sometimes must be used in the command line
-    -- to hide addon-specific opts from hledger's cmdargs parsing,
-    -- (and are also accepted in the config file, though not required there),
-    -- will be removed.
-    -- (hledger does not preserve -- arguments)
+    -- The first "--" argument, which sometimes must be used in the command line
+    -- to hide addon-specific opts from hledger's cmdargs parsing, is consumed here;
+    -- any later "--" arguments are the addon's, and are passed on.
     -- Arguments written before the command name, and general opts from the config file,
     -- are not passed since we can't be sure they're supported.
     | isaddoncmd -> do
         let
-          addonargs0 = filter (/="--") $ supportedgenargsfromconf <> confcmdargs <> aliasargs <> cliargswithoutcmd
+          (cliargsbeforesep, cliargsaftersep) = breakAtFirstSeparator cliargswithoutcmd
+          addonargs0 = supportedgenargsfromconf <> confcmdargs0 <> aliasargs <> cliargsbeforesep <> cliargsaftersep
           addonargs = dropCliSpecificOpts addonargs0
           shellcmd = printf "%s-%s %s" progname cmdname (unwords $ map quoteForCommandLine addonargs) :: String
         dbgio "addon command selected" cmdname
@@ -561,6 +561,14 @@ checkReqValFlagArgsHaveValues reqvalflagargs = go
       | checkable a, looksLikeKnownFlag b =
           usageError $ a <> " needs a value, but the next argument is another flag: " <> b
       | otherwise = a : go (b:rest)
+
+-- | Split these args at the first "--" argument, dropping it.
+-- That one is the separator hiding later args from hledger's own parsing;
+-- any others belong to whatever we pass the args on to.
+breakAtFirstSeparator :: [String] -> ([String], [String])
+breakAtFirstSeparator as = case break (=="--") as of
+  (bs, _:cs) -> (bs, cs)
+  _          -> (as, [])
 
 -- | Remove any --conf/--no-conf/-n flags, and any --conf value, from these args.
 dropConfFlags :: [String] -> [String]

@@ -39,6 +39,10 @@ argv: [--sort]
 $  PATH=$PATH:addons hledger argvdump --someunknownflag=x
 argv: [--someunknownflag=x]
 
+# ** 9. Only the first -- is consumed; later ones are the addon's.
+$  PATH=$PATH:addons hledger argvdump -- foo -- bar
+argv: [foo] [--] [bar]
+
 
 
 #  ** 0. having no addons shouldn't break the commands list (how to test ?)
