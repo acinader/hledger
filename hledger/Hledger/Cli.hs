@@ -280,6 +280,13 @@ main = handleExit $ withGhcDebug' $ do
     mbuiltincmdaction = findBuiltinCommand cmdname
     effectivemode = maybe (mainmode []) fst mbuiltincmdaction
 
+    -- The required-value flags to pre-check on the final command line.
+    -- For an addon command, only hledger's general flags; any other flags are the addon's.
+    -- Otherwise, the flags supported by the command's mode.
+    finalreqvalflagargs
+      | isaddoncmd = generalReqValFlagArgs
+      | otherwise  = modeReqValFlagArgs effectivemode
+
   dbgio "cli args with command first and no cli-specific opts" cliargswithcmdfirstwithoutclispecific
   when isaliascmd $
     dbg1IO "expanded command alias" (cmdarg, (effectivecmdarg, aliasargs))
@@ -354,7 +361,7 @@ main = handleExit $ withGhcDebug' $ do
 
   -- Run cmdargs on command name + supported conf general args + conf subcommand args + cli args to get the final options.
   -- A bad flag or flag argument will cause the program to exit with an error here.
-  let rawopts = cmdargsParse "final command line" (mainmode addons) finalargs
+  let rawopts = cmdargsParseWith finalreqvalflagargs "final command line" (mainmode addons) finalargs
 
   ---------------------------------------------------------------
   seq rawopts $  -- order debug output
@@ -506,16 +513,25 @@ argsToCliOpts args addons = do
 -- (useful when cmdargsParse is called more than once).
 -- If parsing fails, exit the program with an informative error message.
 cmdargsParse :: String -> Mode RawOpts -> [String] -> RawOpts
-cmdargsParse desc m args0 = process m (ensureDebugFlagHasVal (checkReqValFlagArgsHaveValues args0))
+cmdargsParse = cmdargsParseWith reqValFlagArgs
+
+-- | Like 'cmdargsParse', but pre-check for missing values only on the given required-value
+-- flag args, rather than on every one known to hledger. Use this once the command being run
+-- is known, so that flags belonging to other commands are left for cmdargs (or an addon).
+cmdargsParseWith :: [String] -> String -> Mode RawOpts -> [String] -> RawOpts
+cmdargsParseWith reqvalflagargs desc m args0 =
+  process m (ensureDebugFlagHasVal (checkReqValFlagArgsHaveValues reqvalflagargs args0))
   & either
     (\e -> error' $ e <> "\n* while parsing the following args, " <> desc <> ":\n*  " <> unwords (map quoteIfNeeded args0))
     (dbgMsg verboseDebugLevel ("cmdargs: parsing " <> desc <> ": " <> show args0))
   -- XXX better error message when cmdargs fails (eg spaced/quoted/malformed flag values) ?
 
--- | Check that each known required-value flag in the arg list is followed by a value, not another
--- known flag. If a required-value flag is at the end of the args, or is followed by something that
--- looks like a known hledger flag, abort with a usage error naming the offending flag. Returns the
--- args unchanged.
+-- | Check that each of the given required-value flags appearing in the arg list is followed by a
+-- value, not another known flag. If such a flag is at the end of the args, or is followed by
+-- something that looks like a known hledger flag, abort with a usage error naming the offending
+-- flag. Returns the args unchanged.
+--
+-- Scanning stops at the first "--", since cmdargs treats everything after it as positional args.
 --
 -- Joined forms like -fFILE or --file=FILE are single tokens, so they bypass the check.
 -- A bare "-" (commonly used to mean stdin), and prefixed forms like "csv:-", are allowed as values.
@@ -523,20 +539,21 @@ cmdargsParse desc m args0 = process m (ensureDebugFlagHasVal (checkReqValFlagArg
 -- allowed, so we don't break legitimate dash-prefixed value syntax.
 -- Flags whose value-ness varies by command (ambiguousFlagArgs, eg -m/-p) are not checked here,
 -- since the command is not yet known; cmdargs validates them per-command.
-checkReqValFlagArgsHaveValues :: [String] -> [String]
-checkReqValFlagArgsHaveValues = go
+checkReqValFlagArgsHaveValues :: [String] -> [String] -> [String]
+checkReqValFlagArgsHaveValues reqvalflagargs = go
   where
     -- --debug is declared as flagReq but treated as optional-value via ensureDebugFlagHasVal,
     -- so don't validate it here.
     -- Ambiguous flags (required-value in some commands, valueless in others, eg -m/-p) are also
     -- skipped, since we can't know here which command's meaning applies; cmdargs will check them.
-    checkable a = a `elem` reqValFlagArgs && a /= "--debug" && a `notElem` ambiguousFlagArgs
+    checkable a = a `elem` reqvalflagargs && a /= "--debug" && a `notElem` ambiguousFlagArgs
     knownFlags = noValFlagArgs `union` reqValFlagArgs `union` optValFlagArgs
     looksLikeKnownFlag b =
          b `elem` knownFlags
       || any (`isPrefixOf` b) longReqValFlagArgs_
       || any (`isPrefixOf` b) longOptValFlagArgs_
     go [] = []
+    go as@("--":_) = as
     go [a]
       | checkable a = usageError $ a <> " needs a value, none provided"
       | otherwise = [a]
@@ -709,6 +726,14 @@ optValCommandFlagNames = [f | (f,i) <- concatMap toFlagInfos commandFlags, isOpt
 noValFlagArgs  = map toFlagArg $ noValGeneralFlagNames  `union` (noValCommandFlagNames  \\ generalFlagNames)
 reqValFlagArgs = map toFlagArg $ reqValGeneralFlagNames `union` (reqValCommandFlagNames \\ generalFlagNames)
 optValFlagArgs = map toFlagArg $ optValGeneralFlagNames `union` (optValCommandFlagNames \\ generalFlagNames)
+
+-- The required-value flag args belonging to hledger's general flags.
+generalReqValFlagArgs = map toFlagArg reqValGeneralFlagNames
+
+-- The required-value flag args supported by this mode or its immediate subcommands.
+modeReqValFlagArgs :: Mode RawOpts -> [String]
+modeReqValFlagArgs m = filter (`elem` modeflagargs) reqValFlagArgs
+  where modeflagargs = map toFlagArg $ concatMap flagNames $ modeAndSubmodeFlags m
 
 -- Flag args whose value-ness is ambiguous across commands: required-value in some command(s)
 -- but valueless (no-value) in others. Their meaning can't be known before the command is

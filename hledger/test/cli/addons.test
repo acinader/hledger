@@ -27,6 +27,18 @@ $  PATH=$PATH:addons hledger --no-conf addon
 $  PATH=$PATH:addons hledger --conf /dev/null addon
 > /args:$/
 
+# ** 6. A flag of some other command is passed to the addon, not validated by hledger.
+$  PATH=$PATH:addons hledger argvdump --sort
+argv: [--sort]
+
+# ** 7. Likewise when hidden behind a --.
+$  PATH=$PATH:addons hledger argvdump -- --sort
+argv: [--sort]
+
+# ** 8. Unknown addon flags with a joined value still reach the addon.
+$  PATH=$PATH:addons hledger argvdump --someunknownflag=x
+argv: [--someunknownflag=x]
+
 
 
 #  ** 0. having no addons shouldn't break the commands list (how to test ?)
