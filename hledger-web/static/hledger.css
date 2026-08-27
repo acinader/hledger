@@ -1,4 +1,9 @@
-/* hledger web ui styles */
+/* hledger web ui styles
+ *
+ * Conventions and the reasoning behind them: ../STYLE.md
+ * Short version: no build step, nothing from a third party, style lives here
+ * rather than in style= attributes, and amounts get tabular figures.
+ */
 
 /*------------------------------------------------------------------------------------------*/
 /* 0. revert some things */
@@ -36,6 +41,43 @@
 /* 2. fonts */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/*------------------------------------------------------------------------------------------*/
+/* 3. tabular data: amounts, dates, column headers */
+
+/* Amounts read as a column of figures: tabular (fixed width) digits, aligned
+   right so the decimal points line up. Both the cell and the amount spans
+   inside it carry .amount, so this reaches either. */
+.amount {
+  font-feature-settings: "tnum";
+  font-variant: tabular-nums;
+  text-align: right;
+}
+
+/* A date is one token; don't break it across lines. */
+.date {
+  white-space: nowrap;
+}
+
+/* A row lights up under the pointer, which helps when reading a wide row
+   across to its amount. The :target rule further down overrides this. */
+.table > tbody > tr:hover > td {
+  background-color: #f6f8fa;
+}
+
+/* Column headers label the data, they are not part of it: small, spaced and
+   muted. Left alignment comes from bootstrap's th rule; .amount above
+   overrides it for the figure columns. */
+.table > thead > tr > th,
+.table > thead > th {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #687385;
+  border-bottom: 1px solid #e6e8eb;
+  white-space: normal;
 }
 
 /*------------------------------------------------------------------------------------------*/
@@ -204,10 +246,6 @@ ul {
 
 .negative {
     color: #a94442;
-}
-
-.date {
-    whitespace: nowrap;
 }
 
 .col-any-0 {
