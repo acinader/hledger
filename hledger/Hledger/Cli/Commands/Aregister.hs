@@ -121,7 +121,7 @@ aregister opts@CliOpts{rawopts_=rawopts,reportspec_=rspec} j = do
       (if empty_ ropts' then id else filter (not . mixedAmountLooksZero . fifth6)) $
       reverse items
     -- select renderer
-    render | fmt=="txt"  = withTitle ropts' . accountTransactionsReportAsText opts (_rsQuery rspec') thisacctq
+    render | fmt=="txt"  = accountTransactionsReportAsText opts (_rsQuery rspec') thisacctq
            | fmt=="html" = accountTransactionsReportAsHTML opts (_rsQuery rspec') thisacctq
             | fmt=="csv"  = printCSV . accountTransactionsReportAsCsv opts hd wd (_rsQuery rspec') thisacctq
             | fmt=="tsv"  = printTSV . accountTransactionsReportAsCsv opts hd wd (_rsQuery rspec') thisacctq
@@ -208,7 +208,7 @@ accountTransactionsReportAsHTML copts reportq thisacctq items =
 -- | Render a register report as plain text suitable for console output.
 accountTransactionsReportAsText :: CliOpts -> Query -> Query -> AccountTransactionsReport -> TL.Text
 accountTransactionsReportAsText copts reportq thisacctq items = TB.toLazyText $
-    (optional (headingopt copts) $ acctHeading <> TB.singleton '\n')
+    titleBuilder
     <>
     postingsOrTransactionsReportAsText alignAll copts itemAsText itemamt itembal items
   where
@@ -217,8 +217,12 @@ accountTransactionsReportAsText copts reportq thisacctq items = TB.toLazyText $
     itemamt (_,_,_,_,a,_) = a
     itembal (_,_,_,_,_,a) = a
 
+    title = effectiveTitle (_rsReportOpts $ reportspec_ copts) defaultTitle
+    titleBuilder | not (headingopt copts) || T.null title = mempty
+                 | otherwise = TB.fromText title <> TB.singleton '\n'
+
     -- show a heading indicating which account was picked, which can be confusing otherwise
-    acctHeading = maybe mempty (\s -> foldMap TB.fromText ["Transactions in ", s, " and subaccounts", qmsg, ":"]) macct
+    defaultTitle = maybe "" (\s -> T.concat ["Transactions in ", s, " and subaccounts", qmsg, ":"]) macct
       where
         -- XXX temporary hack ? recover the account name from the query
         macct = case filterQuery queryIsAcct thisacctq of

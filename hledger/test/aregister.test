@@ -142,3 +142,20 @@ Transactions in a and subaccounts:
 $ hledger -f - areg d --drop 1
 Transactions in d and subaccounts:
 2025-06-12                      b, c                           $-2           $-2
+
+# ** 10. --title replaces the default heading.
+<
+2025-06-12
+  (a)   $1
+
+$ hledger -f - areg a --title 'My Title'
+My Title
+2025-06-12                      a                               $1            $1
+
+# ** 11. An empty --title suppresses the heading.
+<
+2025-06-12
+  (a)   $1
+
+$ hledger -f - areg a --title=
+2025-06-12                      a                               $1            $1

@@ -5678,7 +5678,7 @@ Examples:
 
 # Report titles
 
-Some reports (`balancesheet`, `balancesheetequity`, `cashflow`, `incomestatement`) are displayed with
+Some reports (`aregister`, `balance` (multi-period), `balancesheet`, `balancesheetequity`, `cashflow`, `holdings`, `incomestatement`) are displayed with
 a title by default, and others are not.  For most reports you can set a title with `--title='Some Text'`,
 or suppress the title with `--title=`.
 
