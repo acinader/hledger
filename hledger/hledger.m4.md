@@ -3627,7 +3627,8 @@ source | simplefincsv data/simplefin.json 'unify.*checking'
 
 Whenever hledger runs one of these commands, it will echo the command on stderr.
 If the command produces error output, but exits successfully, hledger will show the error output as a warning.
-If the command fails, hledger will fail and show the error output in the error message.
+If a data cleaning command fails, hledger will fail and show the error output in the error message.
+If a data generating command fails, hledger will show the error as a warning and continue, treating this as if no data was found.
 
 *Added in 1.50; experimental.*
 

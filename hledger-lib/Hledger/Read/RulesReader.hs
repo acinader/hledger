@@ -45,6 +45,7 @@ import Prelude hiding (Applicative(..))
 import Control.Applicative (Applicative(..))
 import Control.Concurrent (forkIO)
 import Control.DeepSeq (deepseq)
+import Control.Exception.Safe (catchAny)
 import Control.Monad (unless, void, when)
 import Control.Monad.Except       (ExceptT(..), liftEither, throwError)
 import Control.Monad.Fail qualified as Fail
@@ -268,7 +269,10 @@ parse iopts rulesfile h = do
 
     -- no file pattern, but a data generating command
     (Nothing, _, Just cmd) -> -- trace "data generating command" $
-      liftIO $ runCommand rulesfile $ dbg0Msg ("running: " ++ cmd) cmd
+      liftIO $
+        (runCommand rulesfile $ dbg0Msg ("running: " ++ cmd) cmd)
+        -- if it fails, warn and carry on
+        `catchAny` (\e -> warn (show e) $ return "")
 
     -- neither a file pattern nor a data generating command
     (Nothing, _, Nothing) -> -- trace "no file pattern or data generating command" $
