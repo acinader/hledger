@@ -48,7 +48,7 @@ formatRow = L.tr_ . traverse_ formatCell
 
 -- | Render a report title as an HTML heading.
 formatTitle :: Text.Text -> Html
-formatTitle = L.h2_ [L.class_ "report-title"] . L.toHtml
+formatTitle = L.h3_ [L.class_ "report-title"] . L.toHtml
 
 formatCell :: (Lines border) => Cell border Html -> Html
 formatCell cell =

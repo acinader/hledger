@@ -5682,7 +5682,7 @@ Some reports (`aregister`, `balance` (multi-period), `balancesheet`, `balanceshe
 a title by default, and others are not.  For most reports you can set a title with `--title='Some Text'`,
 or suppress the title with `--title=`.
 Titles are shown in text and HTML output (and in some commands' CSV/TSV output).
-In HTML output the title is an `<h2 class="report-title">` element, which you can style with a `hledger.css` file.
+In HTML output the title is an `<h3 class="report-title">` element, which you can style with a `hledger.css` file.
 
 Compound reports, like those just mentioned, also have subreport headings, like Assets and Liabilities in the balance sheet.
 You can customise these with `--subreport-titles=HEADING1|HEADING2..`,
