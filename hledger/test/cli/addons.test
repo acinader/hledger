@@ -71,6 +71,10 @@ argv: [--x] [y]
 $  printf '[argvdump]\n  -- -n\n' >$$.conf; PATH=$PATH:addons hledger --conf $$.conf argvdump; rm -f $$.conf
 argv: [-n]
 
+# ** 17. An argument containing an apostrophe is preserved.
+$  PATH=$PATH:addons hledger argvdump "Sam's Diner"
+argv: [Sam's Diner]
+
 
 
 #  ** 0. having no addons shouldn't break the commands list (how to test ?)
