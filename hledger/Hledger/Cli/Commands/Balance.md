@@ -145,7 +145,7 @@ Many of these work with the other balance-like commands as well (`bs`, `cf`, `is
 This command supports the
 [output destination](#output-destination) and
 [output format](#output-format) options,
-with output formats `txt`, `csv`, `tsv` (*Added in 1.32*), `json`, and (multi-period reports only:) `html`, `fods` (*Added in 1.40*).
+with output formats `txt`, `csv`, `tsv` (*Added in 1.32*), `json`, `html`, and `fods` (*Added in 1.40*).
 In `txt` output in a colour-supporting terminal, negative amounts are shown in red.
 
 ### Simple balance report
