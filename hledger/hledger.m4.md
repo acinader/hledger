@@ -5681,6 +5681,7 @@ Examples:
 Some reports (`aregister`, `balance` (multi-period), `balancesheet`, `balancesheetequity`, `cashflow`, `holdings`, `incomestatement`) are displayed with
 a title by default, and others are not.  For most reports you can set a title with `--title='Some Text'`,
 or suppress the title with `--title=`.
+Titles are shown in text and HTML output (and in compound reports' CSV output).
 
 Compound reports, like those just mentioned, also have subreport headings, like Assets and Liabilities in the balance sheet.
 You can customise these with `--subreport-titles=HEADING1|HEADING2..`,

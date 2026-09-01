@@ -7,12 +7,16 @@ module Hledger.Write.Html.Lucid (
     Html,
     L.toHtml,
     styledTableHtml,
+    titledTableHtml,
     formatRow,
     formatCell,
+    formatTitleRow,
     ) where
 
+import           Control.Monad (unless)
 import           Data.Foldable (traverse_)
 import           Data.List (intersperse)
+import           Data.Maybe (listToMaybe)
 import Data.Text qualified as Text
 import Lucid.Base qualified as L
 import Lucid qualified as L
@@ -28,14 +32,28 @@ type Html = L.Html ()
 -- | Export spreadsheet table data as HTML table.
 -- This is derived from <https://hackage.haskell.org/package/classify-frog-0.2.4.3/src/src/Spreadsheet/Format.hs>
 styledTableHtml :: (Lines border) => [[Cell border Html]] -> Html
-styledTableHtml table = do
+styledTableHtml = titledTableHtml Text.empty
+
+-- | Like 'styledTableHtml', but with the given report title, if non-empty,
+-- as a heading row above the table.
+titledTableHtml :: (Lines border) => Text.Text -> [[Cell border Html]] -> Html
+titledTableHtml title table = do
     -- the builtin styles, then the optional user stylesheet so it can override them
     L.style_ Attr.tableStylesheet
     L.link_ [L.rel_ "stylesheet", L.href_ "hledger.css"]
-    L.table_ $ traverse_ formatRow table
+    L.table_ $ do
+        unless (Text.null title) $
+            formatTitleRow (maybe 0 length $ listToMaybe table) title
+        traverse_ formatRow table
 
 formatRow:: (Lines border) => [Cell border Html] -> Html
 formatRow = L.tr_ . traverse_ formatCell
+
+-- | Render a report title as a table heading row spanning the given number of columns.
+formatTitleRow :: Int -> Text.Text -> Html
+formatTitleRow numcolumns title =
+    L.tr_ $ L.th_ [L.colspan_ $ Text.pack $ show numcolumns, L.style_ Attr.alignleft] $
+        L.h2_ $ L.toHtml title
 
 formatCell :: (Lines border) => Cell border Html -> Html
 formatCell cell =

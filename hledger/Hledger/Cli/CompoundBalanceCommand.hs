@@ -38,8 +38,8 @@ import Hledger.Cli.Commands.Balance
 import Hledger.Cli.CliOptions
 import Hledger.Cli.Utils (unsupportedOutputFormatError, writeOutputLazyText)
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
-import Hledger.Write.Html (formatRow, htmlAsLazyText, Html)
-import Hledger.Write.Html.Attribute (stylesheet, tableStyle, alignleft)
+import Hledger.Write.Html (formatRow, formatTitleRow, htmlAsLazyText, Html)
+import Hledger.Write.Html.Attribute (stylesheet, tableStyle)
 import Hledger.Write.Ods (printFods)
 import Hledger.Write.Spreadsheet qualified as Spr
 
@@ -357,7 +357,6 @@ compoundBalanceReportAsHtml ropts cbr =
   let (title, (_fixed, cells)) =
           compoundBalanceReportAsSpreadsheet
               oneLineNoCostFmt "" (Just nbsp) ropts cbr
-      colspanattr = colspan_ $ T.pack $ show $ length $ NonEmpty.head cells
   in do
     -- the builtin styles, then the optional user stylesheet so it can override them
     style_ $ stylesheet $
@@ -368,7 +367,7 @@ compoundBalanceReportAsHtml ropts cbr =
     link_ [rel_ "stylesheet", href_ "hledger.css"]
     table_ $ do
       unless (T.null title) $
-        tr_ $ th_ [colspanattr, style_ alignleft] $ h2_ $ toHtml title
+        formatTitleRow (length $ NonEmpty.head cells) title
       -- Do not use `styledTableHtml` here since that leads to nested `<table>`s.
       traverse_ formatRow $ fmap (map (fmap L.toHtml)) cells
 

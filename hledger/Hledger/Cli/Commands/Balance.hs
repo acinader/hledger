@@ -247,10 +247,12 @@ module Hledger.Cli.Commands.Balance (
   -- ** balance output rendering
  ,balanceReportAsText
  ,balanceReportAsCsv
+ ,balanceReportAsHtml
  ,balanceReportAsSpreadsheet
  ,balanceReportItemAsText
  ,budgetReportAsText
  ,budgetReportAsCsv
+ ,budgetReportAsHtml
  ,budgetReportAsSpreadsheet
  ,multiBalanceRowAsCellBuilders
  ,multiBalanceRowAsCsvText
@@ -305,7 +307,7 @@ import Hledger.Cli.Utils
 import Hledger.Cli.Anchor (setAccountAnchor, dateSpanCell, headerDateSpanCell, renderPeriodHeading)
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
 import Hledger.Write.Ods (printFods)
-import Hledger.Write.Html (Html, styledTableHtml, htmlAsLazyText, toHtml)
+import Hledger.Write.Html (Html, titledTableHtml, htmlAsLazyText, toHtml)
 import Hledger.Write.Spreadsheet (rawTableContent, headerCell,
             addHeaderBorders, addRowSpanHeader,
             cellFromMixedAmount, cellsFromMixedAmount)
@@ -397,8 +399,7 @@ balance opts@CliOpts{reportspec_=rspec} j = case balancecalc_ ropts of
             "json" -> (<>"\n") . toJsonText
             "csv"  -> printCSV . budgetReportAsCsv ropts
             "tsv"  -> printTSV . budgetReportAsCsv ropts
-            "html" -> (<>"\n") . htmlAsLazyText .
-                      styledTableHtml . map (map (fmap toHtml)) . budgetReportAsSpreadsheet oneLineNoCostFmt ropts
+            "html" -> (<>"\n") . htmlAsLazyText . budgetReportAsHtml ropts
             "fods" -> printFods IO.localeEncoding .
                       Map.singleton "Budget Report" . (,) (1,0) . budgetReportAsSpreadsheet oneLineNoCostFmt ropts
             _      -> error' $ unsupportedOutputFormatError fmt
@@ -423,8 +424,7 @@ balance opts@CliOpts{reportspec_=rspec} j = case balancecalc_ ropts of
               "txt"  -> withTitle ropts . TB.toLazyText . balanceReportAsText ropts
               "csv"  -> printCSV . balanceReportAsCsv ropts
               "tsv"  -> printTSV . balanceReportAsCsv ropts
-              "html" -> (<>"\n") . htmlAsLazyText .
-                                   styledTableHtml . map (map (fmap toHtml)) . balanceReportAsSpreadsheet oneLineNoCostFmt ropts
+              "html" -> (<>"\n") . htmlAsLazyText . balanceReportAsHtml ropts
               "json" -> (<>"\n") . toJsonText
               "fods" -> printFods IO.localeEncoding . Map.singleton "Balance Report" . (,) (1,0) . balanceReportAsSpreadsheet oneLineNoCostFmt ropts
               _      -> error' $ unsupportedOutputFormatError fmt  -- PARTIAL:
@@ -648,6 +648,13 @@ addTotalBorders =
         (Ods.DoubleLine : repeat Ods.NoLine)
 
 
+-- | Render a single-column balance report as HTML.
+-- This report has no default heading, so one is shown only with --title.
+balanceReportAsHtml :: ReportOpts -> BalanceReport -> Html
+balanceReportAsHtml ropts br =
+  titledTableHtml (effectiveTitle ropts "") . map (map (fmap toHtml)) $
+    balanceReportAsSpreadsheet oneLineNoCostFmt ropts br
+
 -- | Render a single-column balance report as FODS.
 balanceReportAsSpreadsheet ::
     AmountFormat -> ReportOpts -> BalanceReport -> [[Ods.Cell Ods.NumLines Text]]
@@ -754,7 +761,7 @@ tidyColumnLabels =
 -- | Render a multi-column balance report as HTML.
 multiBalanceReportAsHtml :: ReportOpts -> MultiBalanceReport -> Html
 multiBalanceReportAsHtml ropts mbr =
-  styledTableHtml . map (map (fmap toHtml)) $
+  titledTableHtml (multiBalanceReportTitle ropts mbr) . map (map (fmap toHtml)) $
     snd $ multiBalanceReportAsSpreadsheet ropts mbr
 
 -- | Render the ODS table rows for a MultiBalanceReport.
@@ -770,16 +777,25 @@ multiBalanceReportAsSpreadsheet ropts mbr =
             header : body ++ total)
 
 
+-- | Render a report title as a text block to prefix to a text report,
+-- or nothing if the title is empty.
+titleAsTextBuilder :: Text -> TB.Builder
+titleAsTextBuilder title
+  | T.null title = mempty
+  | otherwise    = TB.fromText title <> TB.fromText "\n\n"
+
 -- | Render a multi-column balance report as plain text suitable for console output.
 multiBalanceReportAsText :: ReportOpts -> MultiBalanceReport -> TL.Text
-multiBalanceReportAsText ropts@ReportOpts{..} r = TB.toLazyText $
-    titleBuilder
+multiBalanceReportAsText ropts r = TB.toLazyText $
+    titleAsTextBuilder (multiBalanceReportTitle ropts r)
     <> multiBalanceReportTableAsText ropts (multiBalanceReportAsTable ropts r)
+
+-- | The heading for a multi-column balance report: a description of the
+-- report, or --title's value if that was provided (possibly empty).
+multiBalanceReportTitle :: ReportOpts -> MultiBalanceReport -> Text
+multiBalanceReportTitle ropts@ReportOpts{..} r = effectiveTitle ropts defaultTitle
   where
     defaultTitle = mtitle <> " in " <> showDateSpan (periodicReportSpan r) <> valuationdesc <> ":"
-    title = effectiveTitle ropts defaultTitle
-    titleBuilder | T.null title = mempty
-                 | otherwise    = TB.fromText title <> TB.fromText "\n\n"
 
     mtitle = case (balancecalc_, balanceaccum_) of
         (CalcValueChange, PerPeriod  ) -> "Period-end value changes"
@@ -953,9 +969,14 @@ type BudgetCalcPercentagesFn  = Change -> BudgetGoal -> [Maybe Percentage]
 
 -- | Render a budget report as plain text suitable for console output.
 budgetReportAsText :: ReportOpts -> BudgetReport -> TL.Text
-budgetReportAsText ropts@ReportOpts{..} budgetr = TB.toLazyText $
-    titleBuilder <>
+budgetReportAsText ropts budgetr = TB.toLazyText $
+    titleAsTextBuilder (budgetReportTitle ropts budgetr) <>
       multiBalanceReportTableAsText ropts (budgetReportAsTable ropts budgetr)
+
+-- | The heading for a budget report: a description of the report,
+-- or --title's value if that was provided (possibly empty).
+budgetReportTitle :: ReportOpts -> BudgetReport -> Text
+budgetReportTitle ropts@ReportOpts{..} budgetr = effectiveTitle ropts defaultTitle
   where
     defaultTitle = "Budget performance in " <> showDateSpan (periodicReportSpan budgetr)
            <> (case conversionop_ of
@@ -968,9 +989,6 @@ budgetReportAsText ropts@ReportOpts{..} budgetr = TB.toLazyText $
                  Just (AtDate d _mc) -> ", valued at " <> showDate d
                  Nothing             -> "")
            <> ":"
-    title = effectiveTitle ropts defaultTitle
-    titleBuilder | T.null title = mempty
-                 | otherwise    = TB.fromText title <> TB.fromText "\n\n"
 
 -- | Build a 'Table' from a multi-column balance report.
 budgetReportAsTable :: ReportOpts -> BudgetReport -> Table Text Text WideBuilder
@@ -1189,6 +1207,12 @@ budgetReportAsCsv :: ReportOpts -> BudgetReport -> [[Text]]
 budgetReportAsCsv ropts report
   = rawTableContent $
     budgetReportAsSpreadsheet machineFmt ropts report
+
+-- | Render a budget report as HTML.
+budgetReportAsHtml :: ReportOpts -> BudgetReport -> Html
+budgetReportAsHtml ropts budgetr =
+  titledTableHtml (budgetReportTitle ropts budgetr) . map (map (fmap toHtml)) $
+    budgetReportAsSpreadsheet oneLineNoCostFmt ropts budgetr
 
 budgetReportAsSpreadsheet ::
   AmountFormat -> ReportOpts -> BudgetReport -> [[Ods.Cell Ods.NumLines Text]]
