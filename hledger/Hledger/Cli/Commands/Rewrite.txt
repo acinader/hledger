@@ -125,7 +125,7 @@ from hledger print.
 
 See also:
 
-https://github.com/simonmichael/hledger/issues/99
+https://github.com/plaintextaccounting/hledger/issues/99
 
 rewrite vs. print --auto
 
