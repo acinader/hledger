@@ -17,7 +17,7 @@ module Hledger.Write.Html (
   L.toHtml,
   Html,
   formatRow,
-  formatTitleRow,
+  formatTitle,
   htmlAsText,
   htmlAsLazyText,
   styledTableHtml,
@@ -30,7 +30,7 @@ import Data.Text.Lazy qualified as TL (Text, toStrict)
 import Lucid qualified as L (renderText, toHtml)
 import Test.Tasty (testGroup)
 
-import Hledger.Write.Html.Lucid (Html, formatRow, formatTitleRow, styledTableHtml, titledTableHtml)
+import Hledger.Write.Html.Lucid (Html, formatRow, formatTitle, styledTableHtml, titledTableHtml)
 
 
 htmlAsText :: Html -> T.Text

@@ -28,7 +28,7 @@ import Data.Map qualified as Map
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder qualified as TB
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Lucid qualified as L hiding (Html)
 import Safe (readMay)
 import System.Console.CmdArgs.Explicit (flagNone, flagReq)
@@ -39,7 +39,7 @@ import Hledger
 import Hledger.Cli.CliOptions
 import Hledger.Cli.Utils
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
-import Hledger.Write.Html (formatRow, htmlAsLazyText, toHtml)
+import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, toHtml)
 import Hledger.Write.Html.Attribute (tableStylesheet)
 import Hledger.Write.Ods (printFods)
 import Hledger.Write.Spreadsheet qualified as Spr
@@ -191,6 +191,8 @@ accountTransactionsReportAsHTML copts reportq thisacctq items =
     -- the builtin styles, then the optional user stylesheet so it can override them
     L.style_ tableStylesheet
     L.link_ [L.rel_ "stylesheet", L.href_ "hledger.css"]
+    let title = accountTransactionsReportTitle copts reportq thisacctq
+    unless (T.null title) $ formatTitle title
     L.table_ $ do
       when (headingopt copts) $ L.thead_ $ L.tr_ $ do
         L.th_ "date"
@@ -217,10 +219,18 @@ accountTransactionsReportAsText copts reportq thisacctq items = TB.toLazyText $
     itemamt (_,_,_,_,a,_) = a
     itembal (_,_,_,_,_,a) = a
 
-    title = effectiveTitle (_rsReportOpts $ reportspec_ copts) defaultTitle
-    titleBuilder | not (headingopt copts) || T.null title = mempty
-                 | otherwise = TB.fromText title <> TB.singleton '\n'
+    title = accountTransactionsReportTitle copts reportq thisacctq
+    titleBuilder | T.null title = mempty
+                 | otherwise    = TB.fromText title <> TB.singleton '\n'
 
+-- | The heading for an account transactions report: a description of the
+-- account shown, or --title's value if that was provided (possibly empty).
+-- Also empty when --heading=no.
+accountTransactionsReportTitle :: CliOpts -> Query -> Query -> Text
+accountTransactionsReportTitle copts reportq thisacctq
+  | not (headingopt copts) = ""
+  | otherwise = effectiveTitle (_rsReportOpts $ reportspec_ copts) defaultTitle
+  where
     -- show a heading indicating which account was picked, which can be confusing otherwise
     defaultTitle = maybe "" (\s -> T.concat ["Transactions in ", s, " and subaccounts", qmsg, ":"]) macct
       where

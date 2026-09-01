@@ -10,13 +10,12 @@ module Hledger.Write.Html.Lucid (
     titledTableHtml,
     formatRow,
     formatCell,
-    formatTitleRow,
+    formatTitle,
     ) where
 
 import           Control.Monad (unless)
 import           Data.Foldable (traverse_)
 import           Data.List (intersperse)
-import           Data.Maybe (listToMaybe)
 import Data.Text qualified as Text
 import Lucid.Base qualified as L
 import Lucid qualified as L
@@ -35,25 +34,21 @@ styledTableHtml :: (Lines border) => [[Cell border Html]] -> Html
 styledTableHtml = titledTableHtml Text.empty
 
 -- | Like 'styledTableHtml', but with the given report title, if non-empty,
--- as a heading row above the table.
+-- as a heading above the table.
 titledTableHtml :: (Lines border) => Text.Text -> [[Cell border Html]] -> Html
 titledTableHtml title table = do
     -- the builtin styles, then the optional user stylesheet so it can override them
     L.style_ Attr.tableStylesheet
     L.link_ [L.rel_ "stylesheet", L.href_ "hledger.css"]
-    L.table_ $ do
-        unless (Text.null title) $
-            formatTitleRow (maybe 0 length $ listToMaybe table) title
-        traverse_ formatRow table
+    unless (Text.null title) $ formatTitle title
+    L.table_ $ traverse_ formatRow table
 
 formatRow:: (Lines border) => [Cell border Html] -> Html
 formatRow = L.tr_ . traverse_ formatCell
 
--- | Render a report title as a table heading row spanning the given number of columns.
-formatTitleRow :: Int -> Text.Text -> Html
-formatTitleRow numcolumns title =
-    L.tr_ $ L.th_ [L.colspan_ $ Text.pack $ show numcolumns, L.style_ Attr.alignleft] $
-        L.h2_ $ L.toHtml title
+-- | Render a report title as an HTML heading.
+formatTitle :: Text.Text -> Html
+formatTitle = L.h2_ [L.class_ "report-title"] . L.toHtml
 
 formatCell :: (Lines border) => Cell border Html -> Html
 formatCell cell =

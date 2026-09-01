@@ -39,7 +39,7 @@ import Hledger.Cli.Commands.Balance (addTotalBorders, renderPeriodicAcct)
 import Hledger.Cli.Commands.Print (roundFromRawOpts)
 import Hledger.Cli.Utils (unsupportedOutputFormatError, writeOutputLazyText)
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
-import Hledger.Write.Html (Html, htmlAsLazyText, styledTableHtml, toHtml)
+import Hledger.Write.Html (Html, htmlAsLazyText, titledTableHtml, toHtml)
 import Hledger.Write.Ods (printFods)
 import Hledger.Write.Spreadsheet (addHeaderBorders, headerCell)
 import Hledger.Write.Spreadsheet qualified as Ods
@@ -162,14 +162,15 @@ holdings opts@CliOpts{rawopts_=rawopts, reportspec_=rspec@ReportSpec{_rsQuery=q,
       "txt"  -> txtoutput
       "csv"  -> printCSV csvoutput
       "tsv"  -> printTSV csvoutput
-      "html" -> (<>"\n") $ htmlAsLazyText $ styledTableHtml htmltable
+      "html" -> (<>"\n") $ htmlAsLazyText $ titledTableHtml title htmltable
       "fods" -> printFods IO.localeEncoding $ M.singleton "Holdings" ((1,0), fodstable)
       "json" -> (<>"\n") $ toJsonText $ map holdingJson holdingrecords
       fmt    -> error' $ unsupportedOutputFormatError fmt
   where
+    -- The default title can be customised or suppressed with --title.
+    title = effectiveTitle ropts ("Holdings on " <> showDate reportdate)
     txtoutput =
-      -- The default title can be customised or suppressed with --title.
-      (case effectiveTitle ropts ("Holdings on " <> showDate reportdate) of
+      (case title of
          "" -> ""
          t  -> TL.fromStrict t <> "\n\n")
       <>

@@ -38,7 +38,7 @@ import Hledger.Cli.Commands.Balance
 import Hledger.Cli.CliOptions
 import Hledger.Cli.Utils (unsupportedOutputFormatError, writeOutputLazyText)
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
-import Hledger.Write.Html (formatRow, formatTitleRow, htmlAsLazyText, Html)
+import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, Html)
 import Hledger.Write.Html.Attribute (stylesheet, tableStyle)
 import Hledger.Write.Ods (printFods)
 import Hledger.Write.Spreadsheet qualified as Spr
@@ -365,11 +365,9 @@ compoundBalanceReportAsHtml ropts cbr =
       ("tr:nth-child(odd) td", "background-color:#eee")
       ]
     link_ [rel_ "stylesheet", href_ "hledger.css"]
-    table_ $ do
-      unless (T.null title) $
-        formatTitleRow (length $ NonEmpty.head cells) title
-      -- Do not use `styledTableHtml` here since that leads to nested `<table>`s.
-      traverse_ formatRow $ fmap (map (fmap L.toHtml)) cells
+    unless (T.null title) $ formatTitle title
+    -- Do not use `styledTableHtml` here since that leads to nested `<table>`s.
+    table_ $ traverse_ formatRow $ fmap (map (fmap L.toHtml)) cells
 
 -- | Render a compound balance report as Spreadsheet.
 compoundBalanceReportAsSpreadsheet ::
