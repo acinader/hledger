@@ -452,18 +452,24 @@ main = handleExit $ withGhcDebug' $ do
     -- 6.5. external addon command found - run it,
     -- passing any cli arguments written after the command name
     -- and any command-specific opts from the config file.
-    -- The first "--" argument, which sometimes must be used in the command line
-    -- to hide addon-specific opts from hledger's cmdargs parsing, is consumed here;
-    -- any later "--" arguments are the addon's, and are passed on.
-    -- Anything written after that first "--" is passed on untouched, including
+    -- The first "--" argument in each source -- a config file section, a command
+    -- alias, or the command line -- is hledger's separator and is consumed here;
+    -- any later "--" arguments in that source are the addon's, and are passed on.
+    -- Anything written after a source's first "--" is passed on untouched, including
     -- args which would otherwise look like hledger's own cli-specific options.
     -- Arguments written before the command name, and general opts from the config file,
     -- are not passed since we can't be sure they're supported.
     | isaddoncmd -> do
         let
-          (cliargsbeforesep, cliargsaftersep) = breakAtFirstSeparator cliargswithoutcmd
-          addonargs0 = supportedgenargsfromconf <> confcmdargs0 <> aliasargs <> cliargsbeforesep
-          addonargs = dropCliSpecificOpts addonargs0 <> cliargsaftersep
+          -- Each argument source carries its own separator: the first "--" in a
+          -- source is hledger's and is consumed, and whatever follows it in that
+          -- source is passed on untouched. Splitting per source rather than over
+          -- the concatenation matters, or a "--" in a config section or alias
+          -- would suppress the stripping of hledger's own options off the
+          -- command line, leaking eg "--conf FILE" to the addon.
+          consumeSeparator as = let (bs, cs) = breakAtFirstSeparator as in dropCliSpecificOpts bs <> cs
+          addonargs = concatMap consumeSeparator
+                        [supportedgenargsfromconf, confcmdargs0, aliasargs, cliargswithoutcmd]
           addonexe = printf "%s-%s" progname cmdname :: String
           shellcmd = unwords $ map quoteForCommandLine $ addonexe : addonargs
         dbgio "addon command selected" cmdname

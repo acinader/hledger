@@ -59,6 +59,18 @@ argv: [--sort] []
 $  PATH=$PATH:addons hledger argvdump 'a b' '$x'
 argv: [a b] [$x]
 
+# ** 14. A "--" written in a config file section is hledger's separator too, and is not passed on.
+$  printf '[argvdump]\n  alpha -- beta\n' >$$.conf; PATH=$PATH:addons hledger --conf $$.conf argvdump gamma; rm -f $$.conf
+argv: [alpha] [beta] [gamma]
+
+# ** 15. A "--" written in a command alias is likewise consumed.
+$  printf '[alias]\n  ad = argvdump -- --x\n' >$$.conf; PATH=$PATH:addons hledger --conf $$.conf ad y; rm -f $$.conf
+argv: [--x] [y]
+
+# ** 16. After that separator, hledger's own cli options reach the addon from a config file too.
+$  printf '[argvdump]\n  -- -n\n' >$$.conf; PATH=$PATH:addons hledger --conf $$.conf argvdump; rm -f $$.conf
+argv: [-n]
+
 
 
 #  ** 0. having no addons shouldn't break the commands list (how to test ?)
