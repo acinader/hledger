@@ -389,8 +389,8 @@ entriesReportAsBeancount atags pricedirs ts =
 
 entriesReportAsSql :: EntriesReport -> TL.Text
 entriesReportAsSql txns = TB.toLazyText $ mconcat
-    [ TB.fromText "create table if not exists postings(id serial,txnidx int,date1 date,date2 date,status text,code text,description text,comment text,account text,amount numeric,commodity text,credit numeric,debit numeric,posting_status text,posting_comment text);\n"
-    , TB.fromText "insert into postings(txnidx,date1,date2,status,code,description,comment,account,amount,commodity,credit,debit,posting_status,posting_comment) values\n"
+    [ TB.fromText "create table if not exists postings(id serial,txnidx int,date1 date,date2 date,status text,code text,description text,comment text,account text,amount numeric,commodity text,debit numeric,credit numeric,posting_status text,posting_comment text);\n"
+    , TB.fromText "insert into postings(txnidx,date1,date2,status,code,description,comment,account,amount,commodity,debit,credit,posting_status,posting_comment) values\n"
     , mconcat . intersperse (TB.fromText ",") $ map values csv
     , TB.fromText ";\n"
     ]
@@ -416,7 +416,7 @@ entriesReportAsSpreadsheet fmt baseUrl query txns =
   Spr.addHeaderBorders
     (map Spr.headerCell
         ["txnidx","date","date2","status","code","description","comment",
-         "account","amount","commodity","credit","debit",
+         "account","amount","commodity","debit","credit",
          "posting-status","posting-comment"])
   :
   concatMap (transactionToSpreadsheet fmt baseUrl query) txns
@@ -468,7 +468,7 @@ postingToSpreadsheet fmt baseUrl query p =
     let debit  = if q >= 0 then amountCell a_ else Spr.emptyCell in
     [setAccountAnchor baseUrl query (paccount p) $ cell account,
      amountCell a_, cell c,
-     credit, debit, cell status, cell comment])
+     debit, credit, cell status, cell comment])
     . amounts $ pamount p
   where
     cell = Spr.defaultCell

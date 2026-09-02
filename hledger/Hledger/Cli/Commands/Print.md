@@ -223,18 +223,18 @@ Here's an example of print's CSV output:
 
 ```cli
 $ hledger print -Ocsv
-"txnidx","date","date2","status","code","description","comment","account","amount","commodity","credit","debit","posting-status","posting-comment"
-"1","2008/01/01","","","","income","","assets:bank:checking","1","$","","1","",""
-"1","2008/01/01","","","","income","","income:salary","-1","$","1","","",""
-"2","2008/06/01","","","","gift","","assets:bank:checking","1","$","","1","",""
-"2","2008/06/01","","","","gift","","income:gifts","-1","$","1","","",""
-"3","2008/06/02","","","","save","","assets:bank:saving","1","$","","1","",""
-"3","2008/06/02","","","","save","","assets:bank:checking","-1","$","1","","",""
-"4","2008/06/03","","*","","eat & shop","","expenses:food","1","$","","1","",""
-"4","2008/06/03","","*","","eat & shop","","expenses:supplies","1","$","","1","",""
-"4","2008/06/03","","*","","eat & shop","","assets:cash","-2","$","2","","",""
-"5","2008/12/31","","*","","pay off","","liabilities:debts","1","$","","1","",""
-"5","2008/12/31","","*","","pay off","","assets:bank:checking","-1","$","1","","",""
+"txnidx","date","date2","status","code","description","comment","account","amount","commodity","debit","credit","posting-status","posting-comment"
+"1","2008/01/01","","","","income","","assets:bank:checking","1","$","1","","",""
+"1","2008/01/01","","","","income","","income:salary","-1","$","","1","",""
+"2","2008/06/01","","","","gift","","assets:bank:checking","1","$","1","","",""
+"2","2008/06/01","","","","gift","","income:gifts","-1","$","","1","",""
+"3","2008/06/02","","","","save","","assets:bank:saving","1","$","1","","",""
+"3","2008/06/02","","","","save","","assets:bank:checking","-1","$","","1","",""
+"4","2008/06/03","","*","","eat & shop","","expenses:food","1","$","1","","",""
+"4","2008/06/03","","*","","eat & shop","","expenses:supplies","1","$","1","","",""
+"4","2008/06/03","","*","","eat & shop","","assets:cash","-2","$","","2","",""
+"5","2008/12/31","","*","","pay off","","liabilities:debts","1","$","1","","",""
+"5","2008/12/31","","*","","pay off","","assets:bank:checking","-1","$","","1","",""
 ```
 
 - There is one CSV record per posting, with the parent transaction's fields repeated.
@@ -242,6 +242,6 @@ $ hledger print -Ocsv
   (This number might change if transactions are reordered within the file,
   files are parsed/included in a different order, etc.)
 - The amount is separated into "commodity" (the symbol) and "amount" (numeric quantity) fields.
-- The numeric amount is repeated in either the "credit" or "debit" column, for convenience.
-  (Those names are not accurate in the accounting sense; it just puts negative amounts under
-  credit and zero or greater amounts under debit.)
+- The numeric amount is repeated in either the "debit" or "credit" column, for convenience.
+  (Those names are not accurate in the accounting sense; it just puts zero or greater amounts
+  under debit and negative amounts under credit.)
