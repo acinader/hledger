@@ -45,6 +45,12 @@ data InputOpts = InputOpts {
     ,balancingopts_     :: BalancingOpts        -- ^ options for transaction balancing
     ,strict_            :: Bool                 -- ^ do extra correctness checks ?
     ,_defer             :: Bool                 -- ^ internal flag: postpone checks, because we are processing multiple files ?
+    ,_importing         :: Bool                 -- ^ internal flag: is this the @import@ command reading its data files ?
+                                                --   Enables the CSV rules reader's import-specific behaviour: preferring the
+                                                --   oldest file matched by a @source@ glob, and honouring the @archive@ rule.
+                                                --   Set by 'importcmd'; other reads should leave it off.
+    ,_dryrun            :: Bool                 -- ^ internal flag: is this a @import --dry-run@ command ?
+                                                --   If set, the CSV rules reader will never archive or remove a data file.
     ,_ioDay             :: Day                  -- ^ today's date, for use with forecast transactions  XXX this duplicates _rsDay, and should eventually be removed when it's not needed anymore.
     ,_oldtimeclock      :: Bool                 -- ^ parse with the old timeclock pairing rules?
     ,_journaldir        :: Maybe FilePath       -- ^ The main journal file's directory. Used eg by the CSV rules reader to locate the
@@ -75,6 +81,8 @@ definputopts = InputOpts
     , balancingopts_     = defbalancingopts
     , strict_            = False
     , _defer             = False
+    , _importing         = False
+    , _dryrun            = False
     , _ioDay             = nulldate
     , _oldtimeclock      = False
     , _journaldir        = Nothing

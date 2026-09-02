@@ -164,9 +164,8 @@ parse iopts rulesfile h = do
   --  gives: import flag, dryrun flag, rulesdir
 
   let
-    args     = progArgs
-    import_  = any (`elem` args) ["import", "imp"]
-    dryrun   = any (`elem` args) ["--dry-run", "--dry"]
+    import_  = _importing iopts
+    dryrun   = _dryrun iopts
     yn b = if b then "yes" else "no"
   dbg2MsgIO $ "importing? " <> yn import_
   when import_ $ dbg2MsgIO $ "dry run? " <> yn dryrun

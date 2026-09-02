@@ -43,7 +43,7 @@ importcmd opts@CliOpts{rawopts_=rawopts,inputopts_=iopts} j = do
     argfiles = listofstringopt "args" rawopts
     rulesdir = takeDirectory (journalFilePath j) </> rulesDirName
     catchup = boolopt "catchup" rawopts
-    dryrun = boolopt "dry-run" rawopts
+    dryRun = boolopt "dry-run" rawopts
     postinglayout = layoutFromRawOpts rawopts
     combinedStyles = 
       let
@@ -62,6 +62,8 @@ importcmd opts@CliOpts{rawopts_=rawopts,inputopts_=iopts} j = do
       new_=True,  -- read only new transactions since last time
       new_save_=False,  -- defer saving .latest files until the end
       strict_=False,  -- defer strict checks until the end
+      _importing=True,  -- let the CSV rules reader do its import-specific things (oldest source file, archiving)
+      _dryrun=dryRun,   -- but with --dry-run, archive nothing and remove no data file
       balancingopts_=defbalancingopts{commodity_styles_= combinedStyles}  -- use amount styles from both when balancing txns
       }
 
@@ -83,14 +85,14 @@ importcmd opts@CliOpts{rawopts_=rawopts,inputopts_=iopts} j = do
             [] -> hPrintf stderr "no new transactions found in %s\n" inputstr
 
             newts | catchup ->
-              if dryrun
+              if dryRun
                 then hPrintf stderr "would skip %d new transactions (dry run)\n\n" (length newts)
                 else do
                   hPrintf stderr "marked %s as caught up, skipping %d transactions\n\n" inputstr (length newts)
                   saveLatestDatesForFiles latestdatesforfiles
 
             newts -> do
-              if dryrun
+              if dryRun
               then do
                 -- show txns to be imported
                 hPrintf stderr "would import %d new transactions from %s:\n\n" (length newts) inputstr
