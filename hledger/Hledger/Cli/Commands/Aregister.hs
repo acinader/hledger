@@ -156,7 +156,7 @@ accountTransactionsReportAsSpreadsheet ::
 accountTransactionsReportAsSpreadsheet opts fmt hd wd reportq thisacctq is =
   optional hd
     [Spr.addHeaderBorders $ map Spr.headerCell $
-      ["txnidx","date","code","description","otheraccounts","change","balance"]]
+      ["txnidx","date","code","description","otheraccounts","amount","balance"]]
   ++
   map (accountTransactionsReportItemAsRecord opts fmt True wd reportq thisacctq) is
 
@@ -198,7 +198,7 @@ accountTransactionsReportAsHTML copts reportq thisacctq items =
         L.th_ "date"
         L.th_ "description"
         L.th_ "otheraccounts"
-        L.th_ "change"
+        L.th_ "amount"
         L.th_ "balance"
       L.tbody_ $ for_ items $
         formatRow . map (fmap toHtml) .
@@ -255,7 +255,7 @@ optional b x = if b then x else mempty
 -- | Render one account register report line item as plain text. Layout is like so:
 -- @
 -- <---------------- width (specified, terminal width, or 80) -------------------->
--- date (10)  description           other accounts       change (12)   balance (12)
+-- date (10)  description           other accounts       amount (12)   balance (12)
 -- DDDDDDDDDD dddddddddddddddddddd  aaaaaaaaaaaaaaaaaaa  AAAAAAAAAAAA  AAAAAAAAAAAA
 -- @
 -- If description's width is specified, account will use the remaining space.
