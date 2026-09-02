@@ -227,6 +227,7 @@ Other contributors' usage estimates can be added here too.
 - <https://github.com/stanford-cs336/assignment1-basics/blob/main/CLAUDE.md>
 - <https://ladybird.org/posts/changing-how-we-develop-ladybird/> ([discussion](https://news.ycombinator.com/item?id=48409191))
 - <https://blog.rust-lang.org/inside-rust/2026/08/05/rust-langrust-is-adopting-an-llm-policy> ([discussion](https://news.ycombinator.com/item?id=49179039))
+- <https://dbushell.com/ai/> ([discussion](https://news.ycombinator.com/item?id=49537900))
 
 ### Law
 - <https://www.congress.gov/crs-product/LSB10922>
@@ -247,3 +248,7 @@ Other contributors' usage estimates can be added here too.
 ### Tools
 - <https://ccusage.com>
 - <https://github.com/ratherlegit/environmental-impact-tracker>
+
+### Risks
+- <https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/>
+and so many more.
