@@ -2224,7 +2224,7 @@ Eg `; foo:a, foo:b`.
 ## Directives
 
 You can add directives to a `journal` file, to add error checking, improve parsing, et cetera.
-hledger's directives are broadly similar to Ledger's, though with many [differences](ledger.md).
+hledger's directives are broadly similar to Ledger's, though with [differences](/ledger.md).
 Directives begin with a keyword, not a date. Some of them can have indented subdirectives.
 
 **Some directives affect only the subsequent entries, and any included subfiles, until the end of the current file.**
