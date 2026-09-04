@@ -6,6 +6,7 @@ Show some part of hledger's documentation, selected by arguments:
 
 - `quickref` (or no args): a quick reference / overview
 - `commands`:              all commands, including addons and aliases
+                           (or just one category, with --builtins/--addons/--aliases)
 - `usage [CMD]`:           command line options help (like -h/--help)
 - `examples [CMD]`:        command line examples
 - `manual [TOPIC]`:        view a topic in the manual, or list them all
@@ -28,7 +29,8 @@ Flags:
   -p                       use less (or $PAGER) when showing the manual
   -w                       use a web browser when showing the manual
   -l                       just list the manual topics matching TOPIC
-     --builtin             with commands: show only built-in commands
+     --builtins            with commands: show only builtin commands
+     --addons              with commands: show only addon commands
      --aliases             with commands: show only command aliases
 ```
 
@@ -47,6 +49,7 @@ Examples
 $ hledger help                    # show the quick reference
 $ hledger help -h                 # show the help command's options
 $ hledger help commands           # list all commands
+$ hledger help commands --aliases # list just the command aliases
 $ hledger help 'time periods'     # show the "Time periods" section in the manual
 $ hledger help keys               # show the "KEYS" section in the hledger-ui manual
 $ hledger help -l                 # list the manual's topics

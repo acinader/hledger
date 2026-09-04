@@ -41,7 +41,10 @@ helpmode = hledgerCommandMode
   ,flagNone ["p"] (setboolopt "help-p") "use less (or $PAGER) when showing the manual"
   ,flagNone ["w"] (setboolopt "help-w") "use a web browser when showing the manual"
   ,flagNone ["l"] (setboolopt "help-l") "just list the manual topics matching TOPIC"
-  ,flagNone ["builtin"] (setboolopt "builtin") "with commands: show only built-in commands"
+  -- These three limit the commands list to one category of command; with none of them, all are shown.
+  ,flagNone ["builtins"] (setboolopt "builtins") "with commands: show only builtin commands"
+  ,flagNone ["addons"]   (setboolopt "addons")   "with commands: show only addon commands"
+  ,flagNone ["aliases"]  (setboolopt "aliases")  "with commands: show only command aliases"
   ]
   [(helpflagstitle, helpflags)]
   hiddenflags  -- accept --conf/--no-conf etc., eg so "help commands" can show config aliases

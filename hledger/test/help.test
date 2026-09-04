@@ -73,8 +73,8 @@ $ hledger help examples nosuchcommand
 $ hledger help quickref
 > /HLEDGER QUICK REFERENCE/
 
-# ** 18. help commands --builtin shows only built-in commands (no addons).
-$ hledger help commands --builtin
+# ** 18. help commands --builtins shows only the builtin commands (no addons).
+$ hledger help commands --builtins
 > !/OTHER ADDONS/
 
 # ** 19. The hledger-ui manual's title opens that manual.
@@ -110,3 +110,20 @@ $ hledger help -l text
 # (two spaces), like its sibling Journal, not level 2.
 $ hledger help manual
 > /^  CSV/
+
+# ** 27. help commands --addons shows only the addon commands, not the builtin ones.
+$ hledger help commands --addons
+> !/show account names/
+
+# ** 28. help commands --addons still shows the other addons section.
+$ hledger help commands --addons
+> /OTHER ADDONS/
+
+# ** 29. help commands --aliases shows only the command aliases, not the builtin commands.
+# (See also cli/command-aliases.test.)
+$ hledger help commands --aliases
+> !/show account names/
+
+# ** 30. The category flags can be combined.
+$ hledger help commands --builtins --addons
+> /show account names/

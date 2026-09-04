@@ -1,6 +1,6 @@
 m4_dnl _commands_
 m4_dnl Used in the hledger manual to include all command docs.
-m4_dnl Keep synced with Hledger.Cli.Commands.commandsList, hledger.m4.md.
+m4_dnl Keep synced with Hledger.Cli.Commands.commandsListSections, hledger.m4.md.
 m4_define({{_commands_}}, 
 {{
 # Help commands

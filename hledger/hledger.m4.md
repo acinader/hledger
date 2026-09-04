@@ -7899,7 +7899,7 @@ Most commands also support the [general options](#options) described above, thou
 (Usually if there's a sensible way for a general option to affect a command, it will.)
 You can list all of a command's options by running `hledger CMD -h`.
 
-<!-- keep commands & descriptions synced with Hledger.Cli.Commands.commandsList, commands.m4 -->
+<!-- keep commands & descriptions synced with Hledger.Cli.Commands.commandsListSections, commands.m4 -->
 
 **[Help commands](#help-commands)**
 
