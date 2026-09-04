@@ -5963,7 +5963,7 @@ There is a restriction with `date:` queries: they may not be used inside OR expr
 <!-- That would allow disjoint report periods or unclear semantics for our reports. -->
 
 Actually, there are three types of boolean query:
-`expr:` for general use, and `any:` and `all:` variants which can be useful with `print`.
+`expr:` for general use, and `any:` and `all:` variants which select whole transactions.
 
 ### expr: query
 **`expr:'QUERYEXPR'`**\
@@ -5978,20 +5978,36 @@ means "show transactions with (at least one posting involving a cash account) an
 
 ### any: query
 **`any:'QUERYEXPR'`**\
-Like `expr:`, but when used with transaction-oriented commands like `print`,
-it matches the transaction only if a posting can be matched by all of QUERYEXPR.\
+Like `expr:`, but it matches a transaction only if one of its postings can be matched
+by all of QUERYEXPR.\
 So, `hledger print any:'cash and amt:>0'`
 means "show transactions where at least one posting posts a positive amount to a cash account".
 
+`any:` is aware of a posting's siblings, even with posting-oriented commands like `register` and `balance`.
+So, `hledger balance expenses any:cash` means "show expenses where the transaction involved cash",
+and `hledger balance expenses not:any:cash` means "show expenses where the transaction did not involve cash".
+
+A query which has only `any:` terms selects entire transactions,
+so its balance report will be zero-balanced,
+showing where the money in those transactions came from and went to.
+For the same reason, combining `any:` or `all:` with `register`'s `--related` flag
+shows nothing: every posting is matched, so there are no unmatched related postings left to show.
+
 ### all: query
 **`all:'QUERYEXPR'`**\
-Like `expr:`, but when used with transaction-oriented commands like `print`,
-it matches the transaction only if all postings are matched by all of QUERYEXPR
-(and there is at least one posting).\
+Like `any:`, but it matches a transaction only if all of its postings are matched
+by all of QUERYEXPR (and there is at least one posting).\
 So, `hledger print all:'cash and amt:0'`
 means "show transactions where all postings involve a cash account and have a zero amount".\
 Or, `hledger print all:'cash or checking'`
 means "show transactions which touch only cash and/or checking accounts".
+
+Like `any:`, `all:` is aware of a posting's siblings in posting-oriented commands.
+So, `hledger register all:'cash or checking'`
+means "show the postings of transactions which touch only cash and/or checking accounts",
+eg transfers between those two accounts.\
+By contrast, `hledger register expr:'cash or checking'` tests each posting on its own,
+so it could also show the cash or checking posting of a grocery purchase.
 
 ## Queries and command options
 

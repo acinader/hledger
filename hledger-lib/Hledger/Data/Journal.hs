@@ -1577,8 +1577,10 @@ journalPivot fieldortagname j = j{jtxns = map (transactionPivot fieldortagname) 
 
 -- | Replace this transaction's postings' account names with the value
 -- of the given field or tag, if any.
+-- The postings are relinked to the new transaction, so that queries which
+-- look at a posting's siblings (any:, all:) see the pivoted account names.
 transactionPivot :: Text -> Transaction -> Transaction
-transactionPivot fieldortagname t = t{tpostings = map (postingPivot fieldortagname) . tpostings $ t}
+transactionPivot fieldortagname t = txnTieKnot t{tpostings = map (postingPivot fieldortagname) . tpostings $ t}
 
 -- | Replace this posting's account name with the value
 -- of the given field or tag, if any, otherwise the empty string.

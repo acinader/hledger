@@ -172,12 +172,17 @@ $ hledger -f - reg expr:'(a and amt:>0) or b'
                                 a                              300           301
                                 b                            -4000         -3699
 
-# ** 13. #2371 aregister
+# ** 13. #2371 aregister.
+# any: selects whole transactions, so the postings of a matched transaction are
+# not filtered further; this shows the same transactions as print in test 14.
 $ hledger -f sample2.journal areg assets any:'(checking and amt:>0) or credit'
 Transactions in assets and subaccounts (matching query):
-2025-01-01 starting balances    li:credit card            1000 USD      1000 USD
-2025-01-02 salary               as:ba:checking            1000 USD      2000 USD
-2025-01-03 pay half of credi..  li:credit card            -200 USD      1800 USD
+2025-01-01 starting balances    li:credit card, eq..         1 AAA         1 AAA
+                                                          2100 USD      2100 USD
+2025-01-02 salary               re:salary                 1000 USD         1 AAA
+                                                                        3100 USD
+2025-01-03 pay half of credi..  li:credit card            -200 USD         1 AAA
+                                                                        2900 USD
 
 # ** 14. #2371 print
 $ hledger -f sample2.journal print -x any:'(checking and amt:>0) or credit'
@@ -232,3 +237,55 @@ $ hledger -f- print all:'a and amt:1'
 
 >=
 
+
+# ** 17. any: in a posting-oriented report selects a posting when one of its
+# sibling postings matches, so this shows only the expenses paid with cash.
+<
+2026-01-01 groceries paid cash
+    expenses:food             10
+    assets:cash
+
+2026-01-02 groceries paid by card
+    expenses:food             20
+    liabilities:card
+
+$ hledger -f- bal expenses any:cash
+                  10  expenses:food
+--------------------
+                  10  
+>=
+
+# ** 18. And negating it selects the expenses paid some other way.
+$ hledger -f- bal expenses not:any:cash
+                  20  expenses:food
+--------------------
+                  20  
+>=
+
+# ** 19. A bare any: query keeps whole transactions, so the report stays balanced.
+$ hledger -f- bal any:cash
+                 -10  assets:cash
+                  10  expenses:food
+--------------------
+                   0  
+>=
+
+# ** 20. all: in a posting-oriented report requires every sibling posting to match.
+$ hledger -f- bal all:'expenses or cash'
+                 -10  assets:cash
+                  10  expenses:food
+--------------------
+                   0  
+>=
+
+# ** 21. any: is sibling-aware in register too, so both postings of the
+# matched transaction are shown.
+$ hledger -f- reg any:card
+2026-01-02 groceries paid by..  expenses:food                   20            20
+                                liabilities:card               -20             0
+>=
+
+# ** 22. Since any: matches every posting of a selected transaction, there are no
+# unmatched related postings, so --related shows nothing.
+$ hledger -f- reg --related any:cash
+>=
