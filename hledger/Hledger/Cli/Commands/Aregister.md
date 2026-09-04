@@ -3,7 +3,7 @@
 (areg)
 
 Show the transactions and running balances in one account,
-with each transaction on one line.
+with one entry per transaction.
 
 ```flags
 Flags:
@@ -89,7 +89,9 @@ The output formats supported are `txt`, `csv`, `tsv` (*Added in 1.32*), `html`, 
 
 ### aregister and posting dates
 
-aregister always shows one line (and date and amount) per transaction.
+aregister always shows one entry (and one date and amount) per
+transaction. (With a single commodity, this means line = one transaction.
+But multi-commodity amounts will be shown with one line per commodity.)
 But sometimes transactions have postings with different dates.  Also,
 not all of a transaction's postings may be within the report period.
 To resolve this, aregister shows the earliest of the transaction's
