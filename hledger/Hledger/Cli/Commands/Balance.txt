@@ -135,9 +135,9 @@ balance can show..
 - commodities displayed on the same line or multiple lines (--layout)
 
 This command supports the output destination and output format options,
-with output formats txt, csv, tsv (Added in 1.32), json, and
-(multi-period reports only:) html, fods (Added in 1.40). In txt output
-in a colour-supporting terminal, negative amounts are shown in red.
+with output formats txt, csv, tsv (Added in 1.32), json, html, and fods
+(Added in 1.40). In txt output in a colour-supporting terminal, negative
+amounts are shown in red.
 
 Simple balance report
 

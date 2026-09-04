@@ -29,6 +29,7 @@ Flags:
   -w                       use a web browser when showing the manual
   -l                       just list the manual topics matching TOPIC
      --builtin             with commands: show only built-in commands
+     --aliases             with commands: show only command aliases
 ```
 
 The manual is built in to your hledger executable, so it can be useful when offline,
