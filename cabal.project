@@ -3,26 +3,18 @@ packages: hledger-lib
           hledger-ui
           hledger-web
 
--- workarounds:
--- https://github.com/haskell/haskeline/issues/130 / hledger #2410, see hledger/package.yaml
--- https://github.com/jtdaugherty/brick/issues/539
--- https://github.com/yesodweb/yesod/issues/1917
--- https://haskell.github.io/security-advisories/advisory/HSEC-2026-0007.html
-
 constraints:
-  attoparsec-aeson >=2.2.2.0,
+  -- https://github.com/jtdaugherty/brick/issues/539
   brick >= 2.10,
-  haskeline >= 0.8.4,
-  persistent >= 2.14.5.2,
-  ram < 0,             
-  text-iso8601 >= 0.2,
   vty-windows >= 0.2.0.1,
+  -- https://github.com/haskell/haskeline/issues/130 / hledger #2410, see hledger/package.yaml
+  haskeline >= 0.8.4,
+  -- https://github.com/yesodweb/yesod/issues/1917
+  ram < 0
 
 allow-newer:
   aeson,
-  containers,
-  template-haskell,
-  text-iso8601,
+  template-haskell
 
 
 -- cabal config suitable for working with ghc 9.14, for haskell-debugger
