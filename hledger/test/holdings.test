@@ -603,3 +603,50 @@ Holdings on 2026-06-30
  assets:broker2 ||                   0 DEF              $30           $0    0.0%                   $20  1209.5% 
 ----------------++----------------------------------------------------------------------------------------------
                 ||                                            $10    $15  100.0%     $5   50.0%    $20   159.3% 
+
+# ** 35. Lots are valued individually, each in its own cost commodity;
+# a row's Price, Value and UGain aggregate them, showing multiple amounts
+# when the lots' cost commodities differ (like Cost).
+<
+commodity AAPL  ; lots:
+
+2026-01-15 buy in dollars
+    assets:us:stocks    10 AAPL @ $50
+    assets:us:cash
+
+2026-02-01 buy in euros
+    assets:eu:stocks    10 AAPL @ €45
+    assets:eu:cash
+
+P 2026-03-31 AAPL $72
+P 2026-03-31 AAPL €60
+$ hledger -f- holdings -e 2026-04-01
+Holdings on 2026-03-31
+
+                  ||       Date  Age    Units  Avg cost  Price        Cost       Value  Weight       UGain  UGain%  RGain    XIRR 
+==================++==============================================================================================================
+ assets:eu:stocks || 2026-02-01  58d  10 AAPL       €45    €60        €450        €600                €150   33.3%         512.1% 
+ assets:us:stocks || 2026-01-15  75d  10 AAPL       $50    $72        $500        $720                $220   44.0%         490.5% 
+------------------++--------------------------------------------------------------------------------------------------------------
+                  ||                                            $500, €450  $720, €600          $220, €150                        
+
+# ** 36. So values and value totals do not depend on how lots are
+# grouped into rows: aggregating with --depth changes no numbers.
+$ hledger -f- holdings -e 2026-04-01 --depth 1
+Holdings on 2026-03-31
+
+        || Date  Age    Units  Avg cost     Price        Cost       Value  Weight       UGain  UGain%  RGain  XIRR 
+========++=========================================================================================================
+ assets ||            20 AAPL            $72, €60  $500, €450  $720, €600          $220, €150                      
+--------++---------------------------------------------------------------------------------------------------------
+        ||                                         $500, €450  $720, €600          $220, €150                      
+
+# ** 37. Likewise when regrouping with --pivot.
+$ hledger -f- holdings -e 2026-04-01 --pivot cur:acct --depth 1
+Holdings on 2026-03-31
+
+      || Date  Age    Units  Avg cost     Price        Cost       Value  Weight       UGain  UGain%  RGain  XIRR 
+======++=========================================================================================================
+ AAPL ||            20 AAPL            $72, €60  $500, €450  $720, €600          $220, €150                      
+------++---------------------------------------------------------------------------------------------------------
+      ||                                         $500, €450  $720, €600          $220, €150                      

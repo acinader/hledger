@@ -106,10 +106,15 @@ Notes:
 ## Valuation
 - Prices are market prices at the report date, from P directives, and from
   transaction costs with `--infer-market-prices`, looked up with the standard
-  price oracle. Each holding is valued in its cost commodity when possible
+  price oracle. Each lot is valued in its cost commodity when known
   (so UGain = Value - Cost is meaningful); otherwise in the default valuation
-  commodity.
-- UGain and UGain% are shown when the value and cost are in a
+  commodity. A row's Price and Value aggregate its lots' prices and values,
+  showing multiple amounts when the lots' value commodities differ (like Cost).
+  Because lots are valued individually, values and value totals do not depend
+  on how lots are grouped into rows (by --depth, --pivot, tree mode etc).
+- A row's Price and Value are blank if any of its lots has no market price.
+- UGain is value minus cost per commodity, shown when the value and cost
+  amounts cover the same commodities; UGain% additionally requires a
   single common commodity.
 - `-V`/`-X COMM`/`--value=end|now|DATE[,COMM]` select the valuation
   commodity and/or valuation date. The cost columns (Cost, Unit/Avg cost,
@@ -117,6 +122,9 @@ Notes:
   commodity at the valuation date, so percent gain is unaffected by
   currency conversion. Costs with no market price to the valuation
   commodity are left unconverted (making UGain blank).
+  Cashflows are not converted (that would need historical rates at each
+  flow date), so XIRR is blank for holdings whose cashflows are in a
+  different commodity than their value.
 - `--value=then` is not supported (holdings is a snapshot report).
 - `-B/--cost` has no effect; units always stay units.
 

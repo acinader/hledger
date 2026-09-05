@@ -67,14 +67,22 @@ accounts are included only when `-E` displays them.
 
 Market prices at the report date come from
 [P directives](#p-directives), and from transaction costs with
-`--infer-market-prices`, as usual; holdings are valued in their cost
-commodity when possible. When a holding has no market price,
-its Price, Value and gain columns are left blank.
+`--infer-market-prices`, as usual. Each lot is valued in its cost
+commodity when known; a row's Price and Value aggregate its lots,
+showing multiple amounts when their value commodities differ (like
+Cost), so values and value totals do not depend on how lots are
+grouped into rows (by `--depth`, `--pivot`, tree mode etc).
+When a lot has no market price, its row's Price, Value and gain
+columns are left blank.
+So in a multi-currency portfolio, aggregated rows and the totals row
+can mix currencies; use `-X COMM` for a single-currency view.
 
 With `-V`, `-X COMM` or `--value` ([Valuation](#valuation)), holdings
 are valued in the default or given valuation commodity instead, and the
 cost columns are also converted to it (at the valuation date, so percent
-gain is unaffected). `--value=then` is not supported, and `-B/--cost`
+gain is unaffected). Cashflows are not converted, however, so the XIRR
+column is left blank for holdings whose cashflows are in a different
+commodity. `--value=then` is not supported, and `-B/--cost`
 has no effect.
 Amounts are displayed with their commodity's display precision
 (unlike lot names, which can show more precision);
