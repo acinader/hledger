@@ -105,7 +105,7 @@ library:
   dependencies:
   - hledger-lib >=1.99 && <1.100
   - hledger >=1.99 && <1.100
-  - aeson >=1 && <2.4
+  - aeson >=2.2.5.1 && <2.4  # avoid https://haskell.github.io/security-advisories/advisory/HSEC-2026-0007.html
   - base64
   - blaze-html
   - blaze-markup
