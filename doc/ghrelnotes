@@ -123,8 +123,7 @@ out-file -append -encoding ascii $HOME/.hledger.journal
 -->
 
 ### Next steps
-Once installed, run `hledger`,
-and see the [hledger Docs](https://hledger.org/doc.html).
+Once installed, run `hledger`, and see the [Docs](https://hledger.org/doc.html).
 
 </details>
 END
