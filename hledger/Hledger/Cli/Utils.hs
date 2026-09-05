@@ -36,6 +36,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.List
 import Data.List.NonEmpty qualified as NE (head, toList)
 import Data.Maybe
+import Data.Set qualified as S
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Text.Lazy qualified as TL
@@ -84,8 +85,31 @@ withJournal opts cmd = do
   -- to let the add command work.
   journalpaths <- journalFilePathFromOpts opts
   let iopts = (inputopts_ opts){_journaldir = Just (takeDirectory (NE.head journalpaths))}
-  j <- runExceptT $ journalTransform opts <$> readJournalFiles iopts (NE.toList journalpaths)
-  either error' cmd j  -- PARTIAL:
+  ej <- runExceptT $ journalTransform opts <$> readJournalFiles iopts (NE.toList journalpaths)
+  case ej of
+    Left e  -> error' e  -- PARTIAL:
+    Right j -> do
+      maybeWarnUnknownValuationCommodity opts j
+      cmd j
+
+-- | Warn on stderr if -X/--value requests a valuation commodity for which
+-- valuation will certainly have no effect: one appearing in no P directive
+-- or cost (from which conversion prices could come) and in which no
+-- amounts are already denominated. Also suggest a journal commodity
+-- equivalent under ISO 4217 currency code normalisation, if any
+-- (eg $ for USD).
+maybeWarnUnknownValuationCommodity :: CliOpts -> Journal -> IO ()
+maybeWarnUnknownValuationCommodity opts j =
+  case valuationTypeValuationCommodity =<< value_ (_rsReportOpts $ reportspec_ opts) of
+    Just c
+      | c `S.notMember` journalCommoditiesFromPriceDirectives j
+      , c `S.notMember` journalCommoditiesFromTransactions j ->
+          warnIO $ "no conversion prices to \"" <> T.unpack c <> "\" can be found." <> suggestion c
+    _ -> return ()
+  where
+    suggestion c = case [s | s <- S.toList (journalCommodities j), s /= c, toCurrencyCode s == toCurrencyCode c] of
+      (s:_) -> " Did you mean \"" <> T.unpack s <> "\" ?"
+      []    -> ""
 
 {-# DEPRECATED withJournalDo "renamed, please use withJournal instead" #-}
 withJournalDo = withJournal

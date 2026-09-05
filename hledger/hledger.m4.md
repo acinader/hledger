@@ -6641,7 +6641,11 @@ using the [market prices](#p-directive) in effect on the *valuation date(s)*, if
 Use this when you want to (eg) show everything in your base currency as far as possible.
 (Commodities for which no conversion rate can be found, will not be converted.)
 
-COMM should be the full commodity symbol or name.
+COMM should be the commodity symbol exactly as written in the journal's
+amounts or market prices (eg `$`, not `USD`, if the journal uses `$`);
+ISO currency codes are not matched to symbols.
+If no conversion price to COMM can be found, a warning is printed,
+suggesting an equivalent journal commodity if one exists.
 Remember to quote [special shell characters](#special-characters), if needed.
 Some examples:
 

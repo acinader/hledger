@@ -48,12 +48,14 @@ $ hledger -f- print -x --value=now,B
 
 >=
 
-# ** 5. request commodity we don't have prices for - no effect
+# ** 5. request commodity we don't have prices for - no effect, and a warning
 $ hledger -f- print -x --value=now,Z
 2019-06-01
     a                                              1 B
     b                                             -1 B
 
+>2
+Warning: no conversion prices to "Z" can be found.
 >=
 
 # ** 6. request commodity C - uses reverse of C->B price.
@@ -101,12 +103,15 @@ $ hledger -f- print
 
 >=0
 
-# ** 10. Valuing in a commodity with no market price has no effect.
+# ** 10. Valuing in a commodity with no market price has no effect,
+# and warns.
 $ hledger -f- print -XZ
 2000-01-01
     a                                             -1A @ 1B
     b                                              1B
 
+>2
+Warning: no conversion prices to "Z" can be found.
 >=0
 
 # ** 11. -B converts to the transaction price's commodity.
@@ -124,6 +129,8 @@ $ hledger -f- print -B -XZ
     a                                             -1B
     b                                              1B
 
+>2
+Warning: no conversion prices to "Z" can be found.
 >=0
 
 # With a market price: same as above.
@@ -142,12 +149,14 @@ $ hledger -f- print
 
 >=0
 
-# ** 14. 
+# ** 14.
 $ hledger -f- print -XZ
 2000-01-01
     a                                             -1A @ 1B
     b                                              1B
 
+>2
+Warning: no conversion prices to "Z" can be found.
 >=0
 
 # ** 15. 
@@ -355,4 +364,34 @@ $ hledger -f- print -X C
 2000-01-01
     (a)                                       105525 C
 
+>=
+
+# ** 34. An unknown valuation commodity is warned about; when a journal
+# commodity has the same ISO 4217 currency code, it is suggested.
+<
+P 2026-01-01 A $2
+
+2026-01-01
+    (a)    1 A
+
+$ hledger -f- print -x -X USD
+2026-01-01
+    (a)                                            1 A
+
+>2
+Warning: no conversion prices to "USD" can be found. Did you mean "$" ?
+>=
+
+# ** 35. A valuation commodity that is known but has no conversion prices
+# (and no amounts denominated in it) is also warned about.
+<
+commodity XYZ 1.00
+
+2026-01-01
+    (a)    $10
+
+$ hledger -f- bal -N -X XYZ
+                 $10  a
+>2
+Warning: no conversion prices to "XYZ" can be found.
 >=
