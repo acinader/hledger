@@ -14,13 +14,12 @@ extra-deps:
 # #2410, #2512:
 - haskeline-0.8.4.1
 - vty-windows-0.2.0.1
-# https://haskell.github.io/security-advisories/advisory/HSEC-2026-0007.html
-- aeson-2.3.0.0
-- aeson-pretty-0.8.10
-- attoparsec-aeson-2.2.2.0
+# for hledger-web and https://haskell.github.io/security-advisories/advisory/HSEC-2026-0007.html
+- aeson-2.2.5.1
+- text-iso8601-0.1.1.2
 - character-ps-0.1
-- text-iso8601-0.2.0.0
-allow-newer: true
+- hashable-1.4.6.0
+- attoparsec-aeson-2.2.2.0
 
 nix:
   pure: false
