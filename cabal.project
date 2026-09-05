@@ -8,9 +8,7 @@ constraints:
   brick >= 2.10,
   vty-windows >= 0.2.0.1,
   -- https://github.com/haskell/haskeline/issues/130 / hledger #2410, see hledger/package.yaml
-  haskeline >= 0.8.4,
-  -- https://github.com/yesodweb/yesod/issues/1917
-  ram < 0
+  haskeline >= 0.8.4
 
 allow-newer:
   aeson,

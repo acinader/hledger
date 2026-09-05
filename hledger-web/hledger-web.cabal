@@ -175,7 +175,6 @@ library
     , file-embed >=0.0.16.0
     , filepath
     , githash >=0.1.6.2
-    , hjsmin
     , hledger ==1.99.*
     , hledger-lib ==1.99.*
     , hspec
@@ -196,6 +195,7 @@ library
     , unordered-containers
     , utf8-string
     , wai
+    , wai-app-static >=3.1
     , wai-cors
     , wai-extra
     , wai-handler-launch >=3.0.3
@@ -204,7 +204,6 @@ library
     , yesod >=1.4 && <1.7
     , yesod-core >=1.4 && <1.8
     , yesod-form >=1.4 && <1.8
-    , yesod-static >=1.4 && <1.7
     , yesod-test
   default-language: GHC2021
   if (flag(dev)) || (flag(library-only))
