@@ -99,6 +99,7 @@ module Hledger.Data.Journal (
   journalCommodities,
   journalCommoditiesFromPriceDirectives,
   journalCommoditiesFromTransactions,
+  journalBaseCurrency,
   journalBaseCurrencyCode,
   journalDateSpan,
   journalDateSpanBothDates,
@@ -473,23 +474,28 @@ journalCommoditiesFromPriceDirectives = S.fromList . concatMap pdcomms . jpriced
 journalCommoditiesFromTransactions :: Journal -> S.Set CommoditySymbol
 journalCommoditiesFromTransactions j = S.fromList $ map acommodity $ journalPostingAndCostAmounts j
 
--- | Guess a base currency for this journal, as a ISO 4217 currency code if possible,
--- choosing as follows:
+-- | Guess a base currency for this journal: Just the commodity symbol
+-- as used in the journal, and its ISO 4217 currency code if one is known
+-- (otherwise the symbol again), choosing as follows:
 -- 1. The "to" commodity that appears most often in P (price) directives, if any.
 -- 2. Otherwise, the commodity that appears most often in posting and cost amounts.
--- 3. Otherwise, "USD".
+-- 3. Otherwise, Nothing.
 -- The synthetic 1:1 bridge directives generated from commodity @alias:@ tags
 -- (see journalInferAliasPrices) are excluded from step 1, so that declaring
 -- aliases doesn't sway the guess.
 -- Commodity symbols are normalised to ISO 4217 codes where possible,
--- so that equivalent symbols are tallied together.
+-- so that equivalent symbols are tallied together; the symbol returned
+-- is the first-occurring one that normalises to the winning code.
 -- Ties are broken by first occurrence order.
-journalBaseCurrencyCode :: Journal -> CurrencyCode
-journalBaseCurrencyCode j =
-  fromMaybe "USD" $ mostFrequent priceTargetComms <|> mostFrequent postingAndCostComms
+journalBaseCurrency :: Journal -> Maybe (CommoditySymbol, CurrencyCode)
+journalBaseCurrency j = pick priceTargetComms <|> pick postingAndCostComms
   where
-    priceTargetComms    = map (toCurrencyCode . acommodity . pdamount) realPriceDirectives
-    postingAndCostComms = map (toCurrencyCode . acommodity) $ journalPostingAndCostAmounts j
+    pick syms = do
+      code <- mostFrequent $ map toCurrencyCode syms
+      sym  <- find ((== code) . toCurrencyCode) syms
+      Just (sym, code)
+    priceTargetComms    = map (acommodity . pdamount) realPriceDirectives
+    postingAndCostComms = map acommodity $ journalPostingAndCostAmounts j
 
     -- Price directives, excluding the 1:1 bridges inferred from commodity alias: tags.
     realPriceDirectives = filter (not . isCommodityAliasPrice) $ jpricedirectives j
@@ -510,6 +516,11 @@ journalBaseCurrencyCode j =
         stats             = foldl' bump M.empty (zip [0::Int ..] xs)
         bump m (i, x)     = M.insertWith combine x (-1, i) m
         combine _ (!c, i) = (c - 1, i)
+
+-- | The ISO 4217 currency code of this journal's guessed base currency
+-- ('journalBaseCurrency'), defaulting to "USD".
+journalBaseCurrencyCode :: Journal -> CurrencyCode
+journalBaseCurrencyCode = maybe "USD" snd . journalBaseCurrency
 
 -- | Unique transaction descriptions used in this journal.
 journalDescriptions :: Journal -> [Text]

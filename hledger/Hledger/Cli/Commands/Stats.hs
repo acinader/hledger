@@ -145,7 +145,7 @@ showLedgerStats verbose l today spn =
       ,("Payees/descriptions", show $ size $ fromList $ map (tdescription) ts)
       ,("Accounts", printf "%d (depth %d)" acctnum acctdepth)
       ,("Commodities",   printf "%s%s" (show $ length cs)        (if verbose then " (" <> T.intercalate ", " cs <> ")" else ""))
-      ,("Base currency code",  T.unpack $ journalBaseCurrencyCode j)
+      ,("Base currency",  basecurrency)
       ,("Market prices", printf "%s%s" (show $ length mktprices) (if verbose then " (" <> T.intercalate ", " mktpricecommodities <> ")" else ""))
     -- Txns this month     : %(monthtxns)s (last month in the same period: %(lastmonthtxns)s)
     -- Unmarked txns      : %(unmarked)s
@@ -156,6 +156,12 @@ showLedgerStats verbose l today spn =
        where
          j = ljournal l
          path' = if verbose then path else ".../" <> takeFileName path where path = journalFilePath j
+         -- The guessed base currency: the journal's symbol, with its ISO
+         -- 4217 code alongside when that differs, eg "$ (USD)"; or "none".
+         basecurrency = case journalBaseCurrency j of
+           Nothing -> "none"
+           Just (sym, code) | sym == code -> T.unpack code
+                            | otherwise   -> T.unpack $ sym <> " (" <> code <> ")"
          includedpaths = drop 1 $ journalFilePaths j
          ts = sortOn tdate $ filter (spanContainsDate spn . tdate) $ jtxns j
          as = nub $ map paccount $ concatMap tpostings ts
