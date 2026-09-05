@@ -5943,76 +5943,67 @@ The [print](#print) command is a little different, showing transactions which:
 
 ## Boolean queries
 
-You can write more complicated "boolean" query expressions, enclosed in quotes and prefixed with `expr:`.
-These can combine subqueries with NOT, AND, OR operators (case insensitive), and parentheses for grouping.
+For more complex needs, you can combine query terms with
+`NOT`, `AND`, `OR` operators (case insensitive) and parentheses,
+writing the whole expression in quotes with one of three prefixes:
+`expr:`, `any:` or `all:`.
 Eg, to show transactions involving both cash and expense accounts:
 
 ```cli
 hledger print expr:'cash AND expenses'
 ```
 
-The prefix and enclosing quotes are required, so don't write `hledger print cash AND expenses`.
-That would be a [space-separated query](#space-separated-queries)
-showing transactions involving accounts with any of "cash", "and", "expenses" in their names.
+The prefix and the quotes are required.
+Two more things to know:
 
-You can write space-separated queries *inside* a boolean query,
-and they will combine as described above, but it might be confusing and best avoided.
-Eg these are equivalent, showing transactions involving cash or expenses accounts:
-
-```cli
-hledger print expr:'cash expenses'
-hledger print cash expenses
-```
-
-There is a restriction with `date:` queries: they may not be used inside OR expressions.
-<!-- That would allow disjoint report periods or unclear semantics for our reports. -->
-
-Actually, there are three types of boolean query:
-`expr:` for general use, and `any:` and `all:` variants which select whole transactions.
+- `date:` queries may not be used inside an OR expression
+  (it could produce a report with disjoint or unclear report periods).
+- Space-separated terms can also appear inside a boolean query,
+  combining as described in [space-separated queries](#space-separated-queries);
+  but it's probably clearer to avoid mixing the two styles.
 
 ### expr: query
 **`expr:'QUERYEXPR'`**\
-For example, `expr:'date:lastmonth AND NOT (food OR rent)'` means
-"match things which are dated in the last month and do not have food or rent in the account name".
+The general purpose boolean query.
+It can match transactions, postings, accounts, etc. depending on context.
+Eg, `expr:'date:lastmonth AND NOT (food OR rent)'` matches things
+dated in the last month, without food or rent in the account name.
 
-When using `expr:` with transaction-oriented commands like `print`,
-posting-oriented query terms like `acct:` and `amt:` are considered to match the transaction
-if they match any of its postings.\
-So, `hledger print expr:'cash and amt:>0'`
-means "show transactions with (at least one posting involving a cash account) and (at least one posting with a positive amount)".
+With transaction-oriented commands like `print`,
+posting-oriented terms like `acct:` and `amt:` match a transaction
+if they match any of its postings.
+So, `hledger print expr:'cash AND amt:>0'` shows transactions which have
+at least one cash posting and at least one positive-amount posting
+(these are not necessarily the same posting).
 
 ### any: query
 **`any:'QUERYEXPR'`**\
-Like `expr:`, but it matches a transaction only if one of its postings can be matched
-by all of QUERYEXPR.\
-So, `hledger print any:'cash and amt:>0'`
-means "show transactions where at least one posting posts a positive amount to a cash account".
+Matches a transaction, if at least one of its postings is matched by QUERYEXPR.
+So, `hledger print any:'cash AND amt:>0'` shows transactions which have
+at least one posting that both involves a cash account and has a positive amount.
 
-`any:` is aware of a posting's siblings, even with posting-oriented commands like `register` and `balance`.
-So, `hledger balance expenses any:cash` means "show expenses where the transaction involved cash",
-and `hledger balance expenses not:any:cash` means "show expenses where the transaction did not involve cash".
+Unlike `expr:`, `any:` always considers whole transactions.
+So, `hledger balance expenses any:cash` shows expenses from transactions involving cash,
+and `hledger balance expenses not:any:cash` shows expenses from transactions not involving cash.
 
-A query which has only `any:` terms selects entire transactions,
+A query containing only `any:` (or `all:`) terms selects entire transactions,
 so its balance report will be zero-balanced,
 showing where the money in those transactions came from and went to.
-For the same reason, combining `any:` or `all:` with `register`'s `--related` flag
-shows nothing: every posting is matched, so there are no unmatched related postings left to show.
+For the same reason, such a query combined with `register`'s `--related` flag shows nothing:
+every posting is matched, so there are no unmatched related postings left to show.
 
 ### all: query
 **`all:'QUERYEXPR'`**\
-Like `any:`, but it matches a transaction only if all of its postings are matched
-by all of QUERYEXPR (and there is at least one posting).\
-So, `hledger print all:'cash and amt:0'`
-means "show transactions where all postings involve a cash account and have a zero amount".\
-Or, `hledger print all:'cash or checking'`
-means "show transactions which touch only cash and/or checking accounts".
+Matches a transaction, if it has at least one posting and all of its postings
+are matched by QUERYEXPR.
+So, `hledger print all:'cash OR checking'` shows transactions
+touching only cash and/or checking accounts.
 
-Like `any:`, `all:` is aware of a posting's siblings in posting-oriented commands.
-So, `hledger register all:'cash or checking'`
-means "show the postings of transactions which touch only cash and/or checking accounts",
-eg transfers between those two accounts.\
-By contrast, `hledger register expr:'cash or checking'` tests each posting on its own,
-so it could also show the cash or checking posting of a grocery purchase.
+Like `any:`, `all:` always considers whole transactions.
+So, `hledger register all:'cash OR checking'` shows the postings of transactions
+touching only cash and/or checking accounts - eg, transfers between those two.
+By contrast, `hledger register expr:'cash OR checking'` tests each posting on its own,
+so it could also show, say, the cash posting of a grocery purchase.
 
 ## Queries and command options
 
