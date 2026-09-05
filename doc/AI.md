@@ -228,16 +228,18 @@ Other contributors' usage estimates can be added here too.
 - <https://ladybird.org/posts/changing-how-we-develop-ladybird/> ([discussion](https://news.ycombinator.com/item?id=48409191))
 - <https://blog.rust-lang.org/inside-rust/2026/08/05/rust-langrust-is-adopting-an-llm-policy> ([discussion](https://news.ycombinator.com/item?id=49179039))
 - <https://dbushell.com/ai/> ([discussion](https://news.ycombinator.com/item?id=49537900))
+- <https://www.visidata.org/blog/2026/ai/#self-assessed-ai-level-for-contributions>
 
 ### Law
 - <https://www.congress.gov/crs-product/LSB10922>
 - <https://legallayer.substack.com/p/who-owns-the-claude-code-wrote> ([discussion](https://news.ycombinator.com/item?id=47932937))
 
 ### Research
-- **[AI 2027](https://ai-2027.com)** Mandatory reading.
+- [AI 2027](https://ai-2027.com), [AI 2040](https://ai-2040.com)
+- Jaron Lanier: <https://www.newyorker.com/science/annals-of-artificial-intelligence/there-is-no-ai>
 - [From Technical Debt to Cognitive and Intent Debt: Rethinking Software Health in the Age of AI](https://arxiv.org/pdf/2603.22106)
 
-### Practitioners
+### Software Practitioners
 - Donald Knuth: <https://cs.stanford.edu/~knuth/papers/claude-cycles.pdf>
 - Kent Beck: <https://tidyfirst.substack.com/t/genies>,\
   <https://www.youtube.com/watch?v=5htJ2ML7BKU> 
