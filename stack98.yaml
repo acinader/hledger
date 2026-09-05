@@ -9,6 +9,8 @@ packages:
 - hledger-web
 
 extra-deps:
+# for the rewrite command's --diff (Data.Algorithm.DiffContext):
+- Diff-1.0.2
 - encoding-0.10
 - hashtables-1.4.2
 # for #2410, #2512:

@@ -212,8 +212,9 @@ library:
   # - Hledger.Cli.Utils
   # - Hledger.Cli.Version
   dependencies:
-  - Diff >=0.2
+  - Diff >=1.0  # for Data.Algorithm.DiffContext's context-diff API
   - hashable >=1.2.4
+  - pretty
   - lucid
   - modern-uri >=0.3
 
