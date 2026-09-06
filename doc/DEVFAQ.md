@@ -10,10 +10,11 @@ This is just getting started. It will absorb some of the other [Developer docs](
 
 ```cli
 $ git clone https://github.com/plaintextaccounting/hledger
-$ stack build
+$ cd hledger
+$ stack build hledger    # or hledger-ui, hledger-web, or no argument to build all
 ```
-You can specify `hledger`, `hledger-ui` or `hledger-web` as an argument to build just that executable.
-Please see [Install > Build from source](install.md#build-from-source) for more details and other build methods.
+[Install > Build from source](install.md#build-from-source) has the maintained build instructions,
+including required C libraries, other build methods, and troubleshooting.
 
 ## What other repos are there ?
 
@@ -43,7 +44,7 @@ $ stack install
 ```
 This installs the hledger executables to `~/.local/bin`. You should have this directory configured in $PATH.
 Or you can install to another directory with `--local-bin-path`.
-It builds the executables first if needed; see [Install > Build from source](install.md#build-from-source) for more about building.
+It builds the executables first if needed.
 You can specify `hledger`, `hledger-ui` or `hledger-web` as an argument to build/install just that executable.
 
 If you use cabal, it has a similar command; the argument is required.
