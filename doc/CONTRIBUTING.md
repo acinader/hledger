@@ -6,6 +6,34 @@ We invite you to jump in, and thank you!
 There are many ways to help. Browse the ideas below,
 and/or say hello in the [chat](support.md) and we'll help find you a useful job.
 
+## Developer quick start
+
+Install these prerequisites:
+
+- [git](https://git-scm.com)
+- [stack](https://haskellstack.org) (or [cabal](https://www.haskell.org/cabal/), but project scripts use stack)
+- [just](https://just.systems), which runs our project scripts
+- bash, used by the project scripts (on mac, a newer one than /bin/bash: `brew install bash`)
+- [shelltestrunner](https://hackage.haskell.org/package/shelltestrunner), which runs our functional tests: `stack install shelltestrunner`
+
+Get and build the code (for more details and help with build problems, see [Build from source](install.md#build-from-source)):
+
+    git clone https://github.com/plaintextaccounting/hledger
+    cd hledger
+    stack build hledger    # or hledger-ui, hledger-web, or no argument to build all
+
+Run the executable you just built:
+
+    stack exec -- hledger    # ARGS...
+
+Run the tests:
+
+    just functest    # unit and functional tests; add --hide for less output
+    just test        # all tests; slower, requires a second build for doctests
+
+For more workflows (GHCI, ghcid, benchmarks, docs generation..) see [Developer workflows](DEVWORKFLOWS.md),
+and for more project scripts run `just` in the main repo.
+
 ## Visitor / passer-by ?
 
 - Give feedback on the site and your impressions of the project, small or large, good or bad. This is valuable.
@@ -32,8 +60,8 @@ and/or say hello in the [chat](support.md) and we'll help find you a useful job.
 - Test installation on platforms you have access to
 - Test examples, advice, and links in the docs
 - Run the latest release or developer build in daily use
-- Run [tests](#run-package-tests)
-- Run [benchmarks](#run-package-benchmarks)
+- Run [tests](DEVWORKFLOWS.md#run-package-tests)
+- Run [benchmarks](DEVWORKFLOWS.md#run-package-benchmarks)
 - Report packaging, documentation, UX, functional, performance issues (<https://bugs.hledger.org/new>)
 - Test new releases, report regressions and collect regression finder bounties
 - Discuss and help analyse problems via chat/mail list/issue tracker
@@ -57,6 +85,7 @@ and/or say hello in the [chat](support.md) and we'll help find you a useful job.
 
 ## Developer ?
 
+- See the [Developer quick start](#developer-quick-start) above
 - Give feedback on your experience using the hledger packages
 - Suggest API improvements
 - See the [Developer FAQ](DEVFAQ.md) and other [Developer docs](dev.md).
