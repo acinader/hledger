@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {- |
 HTML writing helpers using blaze-html.
+Currently unused: this was groundwork for a possible lucid -> blaze-html
+migration, but CLI reports still use "Hledger.Write.Html.Lucid",
+which has also evolved further than this module.
 -}
 
 module Hledger.Write.Html.Blaze (
