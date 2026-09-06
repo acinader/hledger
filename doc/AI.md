@@ -237,7 +237,7 @@ Other contributors' usage estimates can be added here too.
 ### Research
 - [AI 2027](https://ai-2027.com), [AI 2040](https://ai-2040.com)
 - Jaron Lanier: <https://www.newyorker.com/science/annals-of-artificial-intelligence/there-is-no-ai>
-- [From Technical Debt to Cognitive and Intent Debt: Rethinking Software Health in the Age of AI](https://arxiv.org/pdf/2603.22106)
+- Margaret-Anne Storey: [From Technical Debt to Cognitive and Intent Debt: Rethinking Software Health in the Age of AI](https://arxiv.org/pdf/2603.22106)
 
 ### Software Practitioners
 - Donald Knuth: <https://cs.stanford.edu/~knuth/papers/claude-cycles.pdf>
