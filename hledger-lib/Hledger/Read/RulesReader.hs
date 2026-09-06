@@ -1341,6 +1341,12 @@ readJournalFromCsv rulesfile rules csvfile csvtext sep = do
     csvrecords <- liftEither $ dbg7 "validateCsv" <$> validateCsv csvrecords1
     dbg6IO "first 3 csv records" $ take 3 csvrecords
 
+    -- transactionFromCsvRecord below will replace any semicolons in descriptions with ".,",
+    -- since journal format can't represent them (#2413); warn once here if so.
+    let numsemis = length $ filter (maybe False (T.any (==';')) . flip (hledgerFieldValue rules) "description") csvrecords
+    when (numsemis > 0) $ warnIO $
+      csvfile <> ": replaced ';' with '.,' in " <> show numsemis <> " description(s), since journal format can't represent it"
+
     -- XXX identify header lines some day ?
     -- let (headerlines, datalines) = identifyHeaderLines csvrecords'
     --     mfieldnames = lastMay headerlines
@@ -1525,7 +1531,11 @@ transactionFromCsvRecord timesarezoned mtzin tzout sourcepos rules record =
               ,"the parse error is:      "<>T.pack (customErrorBundlePretty err)
               ]
     code        = maybe "" singleline' $ fieldval "code"
-    description = maybe "" singleline' $ fieldval "description"
+    description = maybe "" (fixsemicolons . singleline') $ fieldval "description"
+    -- Journal format can't represent a semicolon in a description (when reparsed, it would
+    -- start a comment, truncating the description; #2413). Replace with ".,".
+    -- readJournalFromCsv prints a warning when this happens.
+    fixsemicolons = T.replace ";" ".,"
     comment     = maybe "" unescapeNewlines $ fieldval "comment"
 
     -- Convert some parsed comment text back into following comment syntax,

@@ -1298,6 +1298,21 @@ $ mkdir -p t2537.$$ && cd t2537.$$ && printf '2000-01-01,withdraw,1.00\n' >t.csv
 This included file forms a cycle/
 >=1
 
+# ** 71. A semicolon in the description would start a comment when the output
+# is reparsed, truncating the description; it is replaced with ".,", with a warning. (#2413)
+<
+2020-01-01,"a description; with a semicolon","this is a comment",50
+
+RULES
+fields date,description,comment,amount
+$  ./csvtest.sh
+2020-01-01 a description., with a semicolon  ; this is a comment
+    expenses:unknown                              50
+    income:unknown                               -50
+
+>2 /replaced ';' with '\.,' in 1 description/
+>=0
+
 # ** .
 #<
 #$  ./csvtest.sh

@@ -4013,6 +4013,10 @@ Assigning to `date` sets the [transaction date](#simple-dates). This is required
 
 `description` sets the transaction's [description](#description-1), if any.
 
+Journal format can't represent a semicolon in a description
+(when reparsed, it would start a comment, truncating the description).
+So any semicolons here will be replaced with `.,` (a semicolon on its side), and a warning is printed.
+
 ### comment field
 
 `comment` sets the transaction's [comment](#transaction-comments), if any.
