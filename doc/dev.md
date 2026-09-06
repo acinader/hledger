@@ -29,7 +29,6 @@ and then symlinked into the hledger_site repo for rendering on hledger.org.
 - [IMPACT](IMPACT.md)
 - [ISSUES](ISSUES.md)
 - [JUST-MAKE-SHAKE](JUST-MAKE-SHAKE.md)
-- [LINKS](LINKS.md)
 - [MOCKUPS](MOCKUPS.md)
 - [PULLREQUESTS](PULLREQUESTS.md)
 - [REGRESSIONS](REGRESSIONS.md)
@@ -98,16 +97,6 @@ packages:
 [hledger-interest](https://hackage.haskell.org/package/hledger-interest),
 [hledger-irr](https://hackage.haskell.org/package/hledger-irr),
 [\*hledger\*](https://hackage.haskell.org/packages/search?terms=hledger)\
-diffs:
-[hledger-lib](https://hdiff.luite.com/cgit/hledger-lib/diff),
-[hledger](https://hdiff.luite.com/cgit/hledger/diff),
-[hledger-ui](https://hdiff.luite.com/cgit/hledger-ui/diff),
-[hledger-web](https://hdiff.luite.com/cgit/hledger-web/diff)\
-build status:
-[hledger-lib](https://matrix.hackage.haskell.org/package/hledger-lib),
-[hledger](https://matrix.hackage.haskell.org/package/hledger),
-[hledger-ui](https://matrix.hackage.haskell.org/package/hledger-ui),
-[hledger-web](https://matrix.hackage.haskell.org/package/hledger-web)\
 reverse deps:
 [hledger-lib](https://packdeps.haskellers.com/reverse/hledger-lib),
 [hledger](https://packdeps.haskellers.com/reverse/hledger),
@@ -199,14 +188,12 @@ binary packages:
 [\*hledger\*](https://packages.ubuntu.com/search?suite=all&searchon=names&keywords=hledger)\
 \
 **Gentoo:**
-[hledger](https://gpo.zugaina.org/dev-haskell/hledger),
-[hledger-web](https://gpo.zugaina.org/dev-haskell/hledger-web),
-[\*hledger\*](https://gpo.zugaina.org/Search?search=hledger)\
+[\*hledger\*](https://packages.gentoo.org/packages/search?q=hledger),
+[\*hledger\* overlays](https://gpo.zugaina.org/Search?search=hledger)\
 \
 **Fedora:**
-[hledger](https://apps.fedoraproject.org/packages/hledger),
-[\*hledger\*](https://apps.fedoraproject.org/packages/s/hledger),
-[hledger (package db)](https://admin.fedoraproject.org/pkgdb/package/hledger/),
+[hledger](https://packages.fedoraproject.org/pkgs/hledger/hledger/),
+[\*hledger\*](https://packages.fedoraproject.org/search?query=hledger),
 [Haskell SIG](https://fedoraproject.org/wiki/Haskell_SIG)\
 \
 **Void Linux:** [package search](https://voidlinux.org/packages/)->hledger\
