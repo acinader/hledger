@@ -832,6 +832,7 @@ It can be customised (or overridden) by an optional `hledger.css` file in the
 same directory (there is a sample in the hledger repo).
 
 HTML output will be a HTML fragment, not a complete HTML document.
+It has a newline after each table row, for readability.
 Like other hledger output, for non-ascii characters it will use the system locale's text encoding
 (see [Text encoding](#text-encoding)).
 

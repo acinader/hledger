@@ -38,7 +38,7 @@ import Hledger.Cli.Commands.Balance
 import Hledger.Cli.CliOptions
 import Hledger.Cli.Utils (unsupportedOutputFormatError, writeOutputLazyText)
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
-import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, Html)
+import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, nl, Html)
 import Hledger.Write.Html.Attribute (stylesheet, tableStyle)
 import Hledger.Write.Ods (printFods)
 import Hledger.Write.Spreadsheet qualified as Spr
@@ -209,7 +209,7 @@ compoundBalanceCommand CompoundBalanceCommandSpec{..} opts@CliOpts{reportspec_=r
       "txt"  -> compoundBalanceReportAsText ropts'
       "csv"  -> printCSV . compoundBalanceReportAsCsv ropts'
       "tsv"  -> printTSV . compoundBalanceReportAsCsv ropts'
-      "html" -> htmlAsLazyText . compoundBalanceReportAsHtml ropts'
+      "html" -> (<>"\n") . htmlAsLazyText . compoundBalanceReportAsHtml ropts'
       "fods" -> printFods IO.localeEncoding .
                 fmap (second NonEmpty.toList) . uncurry Map.singleton .
                 compoundBalanceReportAsSpreadsheet
@@ -364,10 +364,12 @@ compoundBalanceReportAsHtml ropts cbr =
       ("td:nth-child(1)", "white-space:nowrap"),
       ("tr:nth-child(odd) td", "background-color:#eee")
       ]
+    nl
     link_ [rel_ "stylesheet", href_ "hledger.css"]
+    nl
     unless (T.null title) $ formatTitle title
     -- Do not use `styledTableHtml` here since that leads to nested `<table>`s.
-    table_ $ traverse_ formatRow $ fmap (map (fmap L.toHtml)) cells
+    table_ $ nl <> (traverse_ formatRow $ fmap (map (fmap L.toHtml)) cells)
 
 -- | Render a compound balance report as Spreadsheet.
 compoundBalanceReportAsSpreadsheet ::

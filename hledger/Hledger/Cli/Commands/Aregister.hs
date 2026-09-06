@@ -39,7 +39,7 @@ import Hledger
 import Hledger.Cli.CliOptions
 import Hledger.Cli.Utils
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
-import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, toHtml)
+import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, nl, toHtml)
 import Hledger.Write.Html.Attribute (tableStylesheet)
 import Hledger.Write.Ods (printFods)
 import Hledger.Write.Spreadsheet qualified as Spr
@@ -187,19 +187,24 @@ accountTransactionsReportItemAsRecord
 -- | Render a register report as a HTML snippet.
 accountTransactionsReportAsHTML :: CliOpts -> Query -> Query -> AccountTransactionsReport -> TL.Text
 accountTransactionsReportAsHTML copts reportq thisacctq items =
-  htmlAsLazyText $ do
+  (<>"\n") $ htmlAsLazyText $ do
     -- the builtin styles, then the optional user stylesheet so it can override them
     L.style_ tableStylesheet
+    nl
     L.link_ [L.rel_ "stylesheet", L.href_ "hledger.css"]
+    nl
     let title = accountTransactionsReportTitle copts reportq thisacctq
     unless (T.null title) $ formatTitle title
     L.table_ $ do
-      when (headingopt copts) $ L.thead_ $ L.tr_ $ do
-        L.th_ "date"
-        L.th_ "description"
-        L.th_ "otheraccounts"
-        L.th_ "amount"
-        L.th_ "balance"
+      nl
+      when (headingopt copts) $ do
+        L.thead_ $ L.tr_ $ do
+          L.th_ "date"
+          L.th_ "description"
+          L.th_ "otheraccounts"
+          L.th_ "amount"
+          L.th_ "balance"
+        nl
       L.tbody_ $ for_ items $
         formatRow . map (fmap toHtml) .
         accountTransactionsReportItemAsRecord copts

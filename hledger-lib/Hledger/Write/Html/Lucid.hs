@@ -11,6 +11,7 @@ module Hledger.Write.Html.Lucid (
     formatRow,
     formatCell,
     formatTitle,
+    nl,
     ) where
 
 import           Control.Monad (unless)
@@ -28,6 +29,12 @@ import Hledger.Write.Spreadsheet qualified as Spr
 
 type Html = L.Html ()
 
+-- | A literal newline, to make the HTML output more human-readable.
+-- Emit it only between elements, never inside cell content,
+-- so it doesn't affect rendering.
+nl :: Html
+nl = L.toHtmlRaw ("\n"::Text.Text)
+
 -- | Export spreadsheet table data as HTML table.
 -- This is derived from <https://hackage.haskell.org/package/classify-frog-0.2.4.3/src/src/Spreadsheet/Format.hs>
 styledTableHtml :: (Lines border) => [[Cell border Html]] -> Html
@@ -39,16 +46,18 @@ titledTableHtml :: (Lines border) => Text.Text -> [[Cell border Html]] -> Html
 titledTableHtml title table = do
     -- the builtin styles, then the optional user stylesheet so it can override them
     L.style_ Attr.tableStylesheet
+    nl
     L.link_ [L.rel_ "stylesheet", L.href_ "hledger.css"]
+    nl
     unless (Text.null title) $ formatTitle title
-    L.table_ $ traverse_ formatRow table
+    L.table_ $ nl <> traverse_ formatRow table
 
 formatRow:: (Lines border) => [Cell border Html] -> Html
-formatRow = L.tr_ . traverse_ formatCell
+formatRow row = L.tr_ (traverse_ formatCell row) <> nl
 
 -- | Render a report title as an HTML heading.
 formatTitle :: Text.Text -> Html
-formatTitle = L.h3_ [L.class_ "report-title"] . L.toHtml
+formatTitle title = L.h3_ [L.class_ "report-title"] (L.toHtml title) <> nl
 
 formatCell :: (Lines border) => Cell border Html -> Html
 formatCell cell =

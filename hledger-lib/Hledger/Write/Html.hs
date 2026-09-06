@@ -5,9 +5,8 @@ This module would ideally hide the details of which HTML library is used, but it
 Currently hledger-web uses blaze-html, but hledger CLI reports use lucid.
 lucid has a more usable API than blaze-html (https://chrisdone.com/posts/lucid).
 lucid2's is even better.
-Unfortunately lucid* can not render multi-line or indented text.
-We want this so that humans can read and troubleshoot our HTML output.
-So a transition to blaze-html may be coming.
+lucid* has no pretty-printing renderer, so for human readability
+we inject raw newlines between elements (see 'nl').
 
 -}
 
@@ -20,6 +19,7 @@ module Hledger.Write.Html (
   formatTitle,
   htmlAsText,
   htmlAsLazyText,
+  nl,
   styledTableHtml,
   titledTableHtml,
   tests_Hledger_Write_Html
@@ -30,7 +30,7 @@ import Data.Text.Lazy qualified as TL (Text, toStrict)
 import Lucid qualified as L (renderText, toHtml)
 import Test.Tasty (testGroup)
 
-import Hledger.Write.Html.Lucid (Html, formatRow, formatTitle, styledTableHtml, titledTableHtml)
+import Hledger.Write.Html.Lucid (Html, formatRow, formatTitle, nl, styledTableHtml, titledTableHtml)
 
 
 htmlAsText :: Html -> T.Text
