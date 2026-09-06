@@ -45,7 +45,7 @@ import Prelude hiding (Applicative(..))
 import Control.Applicative (Applicative(..))
 import Control.Concurrent (forkIO)
 import Control.DeepSeq (deepseq)
-import Control.Exception.Safe (catchAny)
+import Control.Exception.Safe (catchAny, tryIO)
 import Control.Monad (unless, void, when)
 import Control.Monad.Except       (ExceptT(..), liftEither, throwError)
 import Control.Monad.Fail qualified as Fail
@@ -76,7 +76,7 @@ import Data.Text.IO qualified as T
 import Data.Time ( Day, TimeZone, UTCTime, LocalTime, ZonedTime(ZonedTime),
   defaultTimeLocale, getCurrentTimeZone, localDay, parseTimeM, utcToLocalTime, localTimeToUTC, zonedTimeToUTC, utctDay)
 import Safe (atMay, headDef, headMay, lastMay, readMay)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getHomeDirectory, getModificationTime, listDirectory, removeFile)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getHomeDirectory, getModificationTime, listDirectory, removeFile)
 import System.Exit      (ExitCode(..))
 import System.FilePath (isAbsolute, splitDirectories, stripExtension, takeBaseName, takeDirectory, takeExtension, (<.>), (</>))
 import System.IO       (Handle, hClose, hPutStrLn, stderr, hGetContents')
@@ -443,9 +443,8 @@ getRulesFile csvfile mrulesfile =
 -- the specified CSV rules file (which may include other rules files).
 readRules :: FilePath -> ExceptT String IO CsvRules
 readRules f = do
-  (txt, sourcelines) <- liftIO $ do
-    dbg6IO "using conversion rules file" f
-    readFilePortably f >>= expandIncludes (takeDirectory f) f
+  liftIO $ dbg6IO "using conversion rules file" f
+  (txt, sourcelines) <- expandIncludes (takeDirectory f) f =<< liftIO (readFilePortably f)
   liftEither $ parseAndValidateCsvRules f sourcelines txt
 
 -- | Read the encoding specified by the @encoding@ rule, if any.
@@ -463,19 +462,43 @@ rulesEncoding rulesfile rules = do
 -- Unlike with journal files, this is done as a pre-parse step to simplify the CSV rules parser.
 -- So that errors can still be reported at the right place, this also returns
 -- each expanded line's source: the file it came from and its line number there.
-expandIncludes :: FilePath -> FilePath -> Text -> IO (Text, [(FilePath, Int)])
-expandIncludes dir file content = first T.unlines . unzip <$> expandLines dir file content
+-- Raises an error if an included file can not be read, or forms an include cycle.
+expandIncludes :: FilePath -> FilePath -> Text -> ExceptT String IO (Text, [(FilePath, Int)])
+expandIncludes dir file content = do
+  cfile <- liftIO $ canonicalizePath file
+  first T.unlines . unzip <$> expandLines [cfile] dir file content
   where
-    expandLines :: FilePath -> FilePath -> Text -> IO [(Text, (FilePath, Int))]
-    expandLines dir1 file1 content1 = concat <$> mapM expandLine (zip [1..] $ T.lines content1)
+    -- The first argument is the canonical paths of this file and its ancestors, for cycle detection.
+    expandLines :: [FilePath] -> FilePath -> FilePath -> Text -> ExceptT String IO [(Text, (FilePath, Int))]
+    expandLines ancestors dir1 file1 content1 = concat <$> mapM expandLine (zip [1..] $ T.lines content1)
       where
         expandLine (lnum, line) =
           case line of
-            (T.stripPrefix "include " -> Just f) -> expandLines dir2 f' =<< T.readFile f'
-              where
-                f' = dir1 </> T.unpack (T.dropWhile isSpace f)
-                dir2 = takeDirectory f'
+            (T.stripPrefix "include " -> Just f) -> do
+              let f'   = dir1 </> T.unpack (T.strip f)
+                  err  = throwError . includeErrorMsg file1 lnum line
+              cf' <- liftIO $ canonicalizePath f'
+              when (cf' `elem` ancestors) $ err $ "This included file forms a cycle: " ++ f'
+              etxt <- liftIO $ tryIO $ readFilePortably f'
+              case etxt of
+                Left e    -> err $ "Could not read this included file:\n" ++ show e
+                Right txt -> expandLines (cf':ancestors) (takeDirectory f') f' txt
             _ -> return [(line, (file1, lnum))]
+
+-- | Format an error message about a problematic include directive:
+-- the directive's file path, line number and line excerpt, megaparsec-style,
+-- followed by the given message.
+includeErrorMsg :: FilePath -> Int -> Text -> String -> String
+includeErrorMsg file lnum line msg = unlines
+  [ file ++ ":" ++ show lnum ++ ":1:"
+  , pad ++ " |"
+  , lnumstr ++ " | " ++ T.unpack line
+  , pad ++ " | ^"
+  , msg
+  ]
+  where
+    lnumstr = show lnum
+    pad = replicate (length lnumstr) ' '
 
 -- defaultRulesText :: FilePath -> Text
 -- defaultRulesText _csvfile = T.pack $ unlines
