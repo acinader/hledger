@@ -56,8 +56,15 @@ body {
 }
 
 /* A date is one token; don't break it across lines. */
-.date {
+td.date {
   white-space: nowrap;
+}
+
+/* One row, one line: descriptions arrive elided, so the width is bounded. */
+@media (min-width: 992px) { /* under md: no room */
+  td.description {
+    white-space: nowrap;
+  }
 }
 
 /* A row lights up under the pointer, which helps when reading a wide row

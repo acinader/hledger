@@ -23,7 +23,7 @@
           <td .date nowrap>
             <a href="@?{(JournalR, [("q", T.unwords $ removeInacct qparam)])}##{transactionFrag torig}">
               #{show (tdate tacct)}
-          <td>
+          <td .description>
             #{textElideRight 30 (tdescription tacct)}
           <td .account>
             $forall (Posting { paccount = acc }, (summName,comma)) <- otherTransAccounts torig
