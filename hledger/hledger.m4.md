@@ -4009,6 +4009,10 @@ Assigning to `date` sets the [transaction date](#simple-dates). This is required
 
 `code` sets the transaction's [code](#code), if any.
 
+Journal format can't represent a right parenthesis in a code
+(when reparsed, it would end the code early).
+So any right parentheses here will be replaced with `]`, with a warning.
+
 ### description field
 
 `description` sets the transaction's [description](#description-1), if any.

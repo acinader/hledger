@@ -1341,11 +1341,16 @@ readJournalFromCsv rulesfile rules csvfile csvtext sep = do
     csvrecords <- liftEither $ dbg7 "validateCsv" <$> validateCsv csvrecords1
     dbg6IO "first 3 csv records" $ take 3 csvrecords
 
-    -- transactionFromCsvRecord below will replace any semicolons in descriptions with ".,",
-    -- since journal format can't represent them (#2413); warn once here if so.
-    let numsemis = length $ filter (maybe False (T.any (==';')) . flip (hledgerFieldValue rules) "description") csvrecords
-    when (numsemis > 0) $ warnIO $
-      csvfile <> ": replaced ';' with '.,' in " <> show numsemis <> " description(s), since journal format can't represent it"
+    -- transactionFromCsvRecord below will replace characters which journal format can't
+    -- represent: semicolons in descriptions (#2413), right parentheses in codes.
+    -- Warn once per file for each; count the affected records here.
+    let warnfixed fieldname badchar replacement =
+          let n = length $ filter (maybe False (T.any (==badchar)) . flip (hledgerFieldValue rules) fieldname) csvrecords
+          in when (n > 0) $ warnIO $
+             csvfile <> ": replaced '" <> [badchar] <> "' with '" <> replacement <> "' in " <>
+             show n <> " " <> T.unpack fieldname <> "(s), since journal format can't represent it"
+    warnfixed "description" ';' ".,"
+    warnfixed "code"        ')' "]"
 
     -- XXX identify header lines some day ?
     -- let (headerlines, datalines) = identifyHeaderLines csvrecords'
@@ -1530,12 +1535,14 @@ transactionFromCsvRecord timesarezoned mtzin tzout sourcepos rules record =
               ["could not parse status value \""<>s<>"\" (should be *, ! or empty)"
               ,"the parse error is:      "<>T.pack (customErrorBundlePretty err)
               ]
-    code        = maybe "" singleline' $ fieldval "code"
+    code        = maybe "" (fixparens . singleline') $ fieldval "code"
     description = maybe "" (fixsemicolons . singleline') $ fieldval "description"
     -- Journal format can't represent a semicolon in a description (when reparsed, it would
-    -- start a comment, truncating the description; #2413). Replace with ".,".
+    -- start a comment, truncating the description; #2413), or a right parenthesis in a code
+    -- (it would end the code early). Replace them with lookalikes.
     -- readJournalFromCsv prints a warning when this happens.
     fixsemicolons = T.replace ";" ".,"
+    fixparens     = T.replace ")" "]"
     comment     = maybe "" unescapeNewlines $ fieldval "comment"
 
     -- Convert some parsed comment text back into following comment syntax,

@@ -1313,6 +1313,21 @@ $  ./csvtest.sh
 >2 /replaced ';' with '\.,' in 1 description/
 >=0
 
+# ** 72. Similarly, a right parenthesis in the code would end the code early
+# when reparsed; it is replaced with "]", with a warning. (#2413)
+<
+2020-01-01,"a (paren) code","some desc",50
+
+RULES
+fields date,code,description,amount
+$  ./csvtest.sh
+2020-01-01 (a (paren] code) some desc
+    expenses:unknown                              50
+    income:unknown                               -50
+
+>2 /replaced '\)' with '\]' in 1 code/
+>=0
+
 # ** .
 #<
 #$  ./csvtest.sh
