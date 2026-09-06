@@ -1270,6 +1270,16 @@ $ mkdir -p t2539.$$ && cd t2539.$$ && printf '2000-01-01,withdraw,1.00\n' >t.csv
 
 >=
 
+# ** 67. An error in an included rules file is reported at the right file and line. (#2537)
+$ mkdir -p t2537.$$ && cd t2537.$$ && printf '2000-01-01,withdraw,1.00\n' >t.csv && printf 'fields date,description,amount\nbadline\n' >common.rules && printf '# a comment\ninclude common.rules\n' >t.rules && hledger -f csv:t.csv --rules t.rules print; s=$?; cd ..; rm -rf t2537.$$; exit $s
+>2 /common\.rules:2:1/
+>=1
+
+# ** 68. An error in the top rules file below an include directive is reported at the right line. (#2537)
+$ mkdir -p t2537.$$ && cd t2537.$$ && printf '2000-01-01,withdraw,1.00\n' >t.csv && printf 'fields date,description,amount\n# a comment\n' >common.rules && printf 'include common.rules\n# a comment\nbadline\n' >t.rules && hledger -f csv:t.csv --rules t.rules print; s=$?; cd ..; rm -rf t2537.$$; exit $s
+>2 /t\.rules:3:1/
+>=1
+
 # ** .
 #<
 #$  ./csvtest.sh

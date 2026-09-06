@@ -66,6 +66,7 @@ import Data.List (elemIndex, mapAccumL, nub, sortOn, isInfixOf, isPrefixOf)
 import Data.List (foldl')
 #endif
 import Data.List.Extra (groupOn)
+import Data.List.NonEmpty qualified as NE
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.MemoUgly (memo)
 import Data.Text (Text)
@@ -441,11 +442,11 @@ getRulesFile csvfile mrulesfile =
 -- | An exception-throwing IO action that reads and validates
 -- the specified CSV rules file (which may include other rules files).
 readRules :: FilePath -> ExceptT String IO CsvRules
-readRules f =
-  liftIO (do
+readRules f = do
+  (txt, sourcelines) <- liftIO $ do
     dbg6IO "using conversion rules file" f
-    readFilePortably f >>= expandIncludes (takeDirectory f)
-  ) >>= either throwError return . parseAndValidateCsvRules f
+    readFilePortably f >>= expandIncludes (takeDirectory f) f
+  liftEither $ parseAndValidateCsvRules f sourcelines txt
 
 -- | Read the encoding specified by the @encoding@ rule, if any.
 -- Or throw an error if an unrecognised encoding is specified.
@@ -460,17 +461,21 @@ rulesEncoding rulesfile rules = do
 -- | Inline all files referenced by include directives in this hledger CSV rules text, recursively.
 -- Included file paths may be relative to the directory of the provided file path.
 -- Unlike with journal files, this is done as a pre-parse step to simplify the CSV rules parser.
--- Unfortunately this means that the parser won't see accurate file paths and positions with included files.
-expandIncludes :: FilePath -> Text -> IO Text
-expandIncludes dir0 content = mapM (expandLine dir0) (T.lines content) <&> T.unlines
+-- So that errors can still be reported at the right place, this also returns
+-- each expanded line's source: the file it came from and its line number there.
+expandIncludes :: FilePath -> FilePath -> Text -> IO (Text, [(FilePath, Int)])
+expandIncludes dir file content = first T.unlines . unzip <$> expandLines dir file content
   where
-    expandLine dir1 line =
-      case line of
-        (T.stripPrefix "include " -> Just f) -> expandIncludes dir2 =<< T.readFile f'
-          where
-            f' = dir1 </> T.unpack (T.dropWhile isSpace f)
-            dir2 = takeDirectory f'
-        _ -> return line
+    expandLines :: FilePath -> FilePath -> Text -> IO [(Text, (FilePath, Int))]
+    expandLines dir1 file1 content1 = concat <$> mapM expandLine (zip [1..] $ T.lines content1)
+      where
+        expandLine (lnum, line) =
+          case line of
+            (T.stripPrefix "include " -> Just f) -> expandLines dir2 f' =<< T.readFile f'
+              where
+                f' = dir1 </> T.unpack (T.dropWhile isSpace f)
+                dir2 = takeDirectory f'
+            _ -> return [(line, (file1, lnum))]
 
 -- defaultRulesText :: FilePath -> Text
 -- defaultRulesText _csvfile = T.pack $ unlines
@@ -499,11 +504,40 @@ expandIncludes dir0 content = mapM (expandLine dir0) (T.lines content) <&> T.unl
 
 -- | An error-throwing IO action that parses this text as CSV conversion rules
 -- and runs some extra validation checks. The file path is used in error messages.
-parseAndValidateCsvRules :: FilePath -> T.Text -> Either String CsvRules
-parseAndValidateCsvRules rulesfile s =
+-- The lines' sources, as returned by expandIncludes, are used to report
+-- errors in included files at the right file and line number.
+parseAndValidateCsvRules :: FilePath -> [(FilePath, Int)] -> T.Text -> Either String CsvRules
+parseAndValidateCsvRules rulesfile sourcelines s =
   case parseCsvRules rulesfile s of
-    Left err    -> Left $ customErrorBundlePretty err
+    Left err    -> Left $ errorBundlePretty $ fixErrorSourcePosition sourcelines s $ finalizeCustomErrorBundle err
     Right rules -> first ((rulesfile <> ":\n") <>) $ validateCsvRules rules
+
+-- | Adjust this parse error bundle's position state, using the line sources
+-- returned by expandIncludes, so that the (first) error is reported at the
+-- right file and line number even when it is in text that was inlined from
+-- an included rules file. The bundle should already have been adjusted by
+-- finalizeCustomErrorBundle, and the given text should be the expanded rules
+-- text that was parsed.
+fixErrorSourcePosition :: [(FilePath, Int)] -> T.Text -> HledgerParseErrors -> HledgerParseErrors
+fixErrorSourcePosition sourcelines s bundle =
+  case msource of
+    Nothing -> bundle
+    Just (sourcefile, sourceline) ->
+      bundle{bundlePosState = (bundlePosState bundle)
+        { pstateInput      = T.drop linestartoffset s
+        , pstateOffset     = linestartoffset
+        , pstateSourcePos  = SourcePos sourcefile (mkPos sourceline) (mkPos 1)
+        , pstateLinePrefix = ""
+        }}
+  where
+    erroroffset = errorOffset $ NE.head $ bundleErrors bundle
+    textbeforeerror = T.take erroroffset s
+    expandedlinenum = T.count "\n" textbeforeerror + 1
+    linestartoffset = T.length textbeforeerror - T.length (T.takeWhileEnd (/= '\n') textbeforeerror)
+    msource = case atMay sourcelines (expandedlinenum - 1) of
+      Just source -> Just source
+      -- at end of input, just after the last line: report the line after the last line's source
+      Nothing     -> (\(file, lnum) -> (file, lnum + 1)) <$> lastMay sourcelines
 
 instance ShowErrorComponent String where
   showErrorComponent = id

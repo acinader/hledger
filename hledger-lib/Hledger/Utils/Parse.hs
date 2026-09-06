@@ -66,6 +66,7 @@ module Hledger.Utils.Parse (
 
   -- ** Pretty-printing custom parse errors
   customErrorBundlePretty,
+  finalizeCustomErrorBundle,
 
   -- ** "Final" parse errors
   FinalParseError,
@@ -400,11 +401,17 @@ reparseExcerpt (SourceExcerpt offset txt) p = do
 -- case for 'ParseErrorBundle's returned from 'runParserT'.
 
 customErrorBundlePretty :: HledgerParseErrors -> String
-customErrorBundlePretty errBundle =
-  let errBundle' = errBundle { bundleErrors =
-        NE.sortWith errorOffset $ -- megaparsec requires that the list of errors be sorted by their offsets
-        bundleErrors errBundle >>= finalizeCustomError }
-  in  errorBundlePretty errBundle'
+customErrorBundlePretty = errorBundlePretty . finalizeCustomErrorBundle
+
+-- | Apply the final adjustments to the custom parse errors in this error
+-- bundle (see 'customErrorBundlePretty'), leaving errors which megaparsec's
+-- standard 'errorBundlePretty' can render correctly. Exposed for callers
+-- which need to adjust the bundle further before rendering it.
+finalizeCustomErrorBundle :: HledgerParseErrors -> HledgerParseErrors
+finalizeCustomErrorBundle errBundle =
+  errBundle { bundleErrors =
+    NE.sortWith errorOffset $ -- megaparsec requires that the list of errors be sorted by their offsets
+    bundleErrors errBundle >>= finalizeCustomError }
 
   where
     finalizeCustomError
