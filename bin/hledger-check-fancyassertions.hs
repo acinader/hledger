@@ -286,12 +286,13 @@ inAssertion account = inAssertion'
 -------------------------------------------------------------------------------
 -- Journals
 
--- | Apply account aliases and restrict to the date range, return the
--- starting balance of every account.
+-- | Apply account aliases, sort transactions by date, and restrict to
+-- the date range; return the starting balance of every account.
 fixupJournal :: Opts -> H.Journal -> IO (H.Journal, [(H.AccountName, H.MixedAmount)])
 fixupJournal opts j = do
     today <- H.getCurrentDay
-    let j' = (if cleared   opts then H.filterJournalTransactions (H.StatusQ H.Cleared)  else id)
+    let j' = sortTransactions
+           . (if cleared   opts then H.filterJournalTransactions (H.StatusQ H.Cleared)  else id)
            . (if pending   opts then H.filterJournalTransactions (H.StatusQ H.Pending)  else id)
            . (if unmarked  opts then H.filterJournalTransactions (H.StatusQ H.Unmarked) else id)
            . (if real      opts then H.filterJournalTransactions (H.Real   True)       else id)
@@ -306,6 +307,7 @@ fixupJournal opts j = do
 
   where
     fixDay today dayf = H.fixSmartDate today <$> dayf opts
+    sortTransactions j'' = j''{H.jtxns = sortOn H.tdate (H.jtxns j'')}
 
 -- | Get the closing balances of every account in the journal.
 closingBalances :: H.Journal -> [(H.AccountName, H.MixedAmount)]
