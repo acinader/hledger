@@ -219,6 +219,14 @@ Other contributors' usage estimates can be added here too.
   - <https://news.ycombinator.com/item?id=48142553> Have a Coherent AI Policy
   - <https://github.com/rust-lang/rust-forge/pull/1040> Add an LLM policy for rust-lang/rust
 
+### Software Practitioners
+- Donald Knuth: <https://cs.stanford.edu/~knuth/papers/claude-cycles.pdf>
+- Kent Beck: <https://tidyfirst.substack.com/t/genies>,\
+  <https://www.youtube.com/watch?v=5htJ2ML7BKU> 
+- Martin Fowler: <https://martinfowler.com/fragments/2026-04-02.html>
+- <https://news.ycombinator.com/item?id=47648828> Eight years of wanting, three months of building with AI
+- Raffael Schneider: <https://raskell.io/articles/looking-back-on-2025>
+
 ### Policies
 - [Pope Leo XIV: Magnifica Humanitas: On Safeguarding The Human Person In The Time Of Artificial Intelligence](https://www.vatican.va/content/leo-xiv/en/encyclicals/documents/20260515-magnifica-humanitas.html)
   ([summary](https://www.theregister.com/ai-ml/2026/05/26/pope-leo-warns-ai-boom-can-give-big-tech-and-the-people-who-run-it-too-much-power/5245883))
@@ -230,27 +238,20 @@ Other contributors' usage estimates can be added here too.
 - <https://dbushell.com/ai/> ([discussion](https://news.ycombinator.com/item?id=49537900))
 - <https://www.visidata.org/blog/2026/ai/#self-assessed-ai-level-for-contributions>
 
-### Law
-- <https://www.congress.gov/crs-product/LSB10922>
-- <https://legallayer.substack.com/p/who-owns-the-claude-code-wrote> ([discussion](https://news.ycombinator.com/item?id=47932937))
-
 ### Research
 - [AI 2027](https://ai-2027.com), [AI 2040](https://ai-2040.com)
 - Jaron Lanier: <https://www.newyorker.com/science/annals-of-artificial-intelligence/there-is-no-ai>
 - Margaret-Anne Storey: [From Technical Debt to Cognitive and Intent Debt: Rethinking Software Health in the Age of AI](https://arxiv.org/pdf/2603.22106)
 
-### Software Practitioners
-- Donald Knuth: <https://cs.stanford.edu/~knuth/papers/claude-cycles.pdf>
-- Kent Beck: <https://tidyfirst.substack.com/t/genies>,\
-  <https://www.youtube.com/watch?v=5htJ2ML7BKU> 
-- Martin Fowler: <https://martinfowler.com/fragments/2026-04-02.html>
-- <https://news.ycombinator.com/item?id=47648828> Eight years of wanting, three months of building with AI
-- Raffael Schneider: <https://raskell.io/articles/looking-back-on-2025>
+### Law
+- <https://www.congress.gov/crs-product/LSB10922>
+- <https://legallayer.substack.com/p/who-owns-the-claude-code-wrote> ([discussion](https://news.ycombinator.com/item?id=47932937))
+
+### Risks
+- <https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/>
+and so many more.
 
 ### Tools
 - <https://ccusage.com>
 - <https://github.com/ratherlegit/environmental-impact-tracker>
 
-### Risks
-- <https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/>
-and so many more.
