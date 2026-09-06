@@ -27,6 +27,7 @@ import Data.These (These(..), these)
 import Safe (minimumDef)
 
 import Hledger.Data
+import Hledger.Query
 import Hledger.Utils
 import Hledger.Reports.ReportOptions
 import Hledger.Reports.ReportTypes
@@ -81,8 +82,12 @@ budgetReport rspec bopts reportspan j = dbg4 "sortedbudgetreport" budgetreport
     budgetj = journalAddBudgetGoalTransactions bopts ropts reportspan j
     priceoracle = journalPriceOracle (infer_prices_ ropts) j
 
+    -- The report spec used for selecting budget goals, with the query terms
+    -- that describe actual transactions/postings dropped. (#2545)
+    budgetrspec = rspec{_rsQuery = budgetGoalQuery $ _rsQuery rspec}
+
     (_, actualspans) = dbg5 "actualspans" $ reportSpan actualj rspec
-    (_, budgetspans) = dbg5 "budgetspans" $ reportSpan budgetj rspec
+    (_, budgetspans) = dbg5 "budgetspans" $ reportSpan budgetj budgetrspec
     allspans = dbg5 "allspans" $ case (interval_ ropts, budgetspans) of
         -- If no interval is specified:
         -- budgetgoalreport's span might be shorter actualreport's due to periodic txns;
@@ -92,10 +97,10 @@ budgetReport rspec bopts reportspan j = dbg4 "sortedbudgetreport" budgetreport
         (_, Just bspan) -> unionDayPartitions bspan =<< actualspans
 
     actualps = dbg5 "actualps" $ getPostings rspec actualj priceoracle reportspan
-    budgetps = dbg5 "budgetps" $ getPostings rspec budgetj priceoracle reportspan
+    budgetps = dbg5 "budgetps" $ getPostings budgetrspec budgetj priceoracle reportspan
 
     actualAcct = dbg5 "actualAcct" $ generateMultiBalanceAccount rspec actualj priceoracle actualspans actualps
-    budgetAcct = dbg5 "budgetAcct" $ generateMultiBalanceAccount rspec budgetj priceoracle budgetspans budgetps
+    budgetAcct = dbg5 "budgetAcct" $ generateMultiBalanceAccount budgetrspec budgetj priceoracle budgetspans budgetps
 
     combinedAcct = dbg5 "combinedAcct" $ if null budgetps
         -- If no budget postings, just use actual account, to avoid unnecssary budget zeros
@@ -103,6 +108,28 @@ budgetReport rspec bopts reportspan j = dbg4 "sortedbudgetreport" budgetreport
         else mergeAccounts actualAcct budgetAcct
 
     budgetreport = generateBudgetReport ropts allspans combinedAcct
+
+-- | Reduce a report query to the terms which are meaningful for selecting budget goals:
+-- the account, account type, depth, date and commodity terms.
+-- The remaining terms (status, code, description, payee, note, tag, realness, amount)
+-- describe actual transactions and postings, and are dropped;
+-- budget goal transactions are synthetic, so applying those terms to them
+-- would discard budget goals unexpectedly (#2545).
+budgetGoalQuery :: Query -> Query
+budgetGoalQuery = filterQuery selectsAccountOrPeriod
+  where
+    selectsAccountOrPeriod q = case q of
+      Acct{}      -> True
+      DepthAcct{} -> True
+      Depth{}     -> True
+      Type{}      -> True
+      Date{}      -> True
+      Date2{}     -> True
+      Sym{}       -> True
+      Cur{}       -> True
+      None        -> True
+      Not q'      -> selectsAccountOrPeriod q'
+      _           -> False
 
 -- | Lay out a set of postings grouped by date span into a regular matrix with rows
 -- given by AccountName and columns by DateSpan, then generate a MultiBalanceReport

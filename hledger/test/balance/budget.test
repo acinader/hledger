@@ -798,3 +798,37 @@ $ hledger -f- bal --budget -M -e 2023-10 --row-total --average -N --summary-only
 "<unbudgeted>","$100","0","$33","0"
 "income:employment","0","$-300","0","$-100"
 "income:gifts:cash","$-100","$-300","$-33","$-100"
+
+# ** 45. A status query filters the actual amounts but not the budget goals. (#2545)
+<
+~ monthly
+    (expenses:food)   $500
+
+2024-01-05 * grocery
+    expenses:food      $100
+    assets:bank
+
+2024-01-15 grocery
+    expenses:food       $50
+    assets:bank
+
+$ hledger -f- bal --budget -M -b 2024-01 -e 2024-02 --cleared
+Budget performance in 2024-01:
+
+               ||                 Jan 
+===============++=====================
+ <unbudgeted>  || $-100               
+ expenses:food ||  $100 [20% of $500] 
+---------------++---------------------
+               ||     0 [ 0% of $500] 
+
+# ** 46. Likewise a description query. (#2545)
+$ hledger -f- bal --budget -M -b 2024-01 -e 2024-02 desc:grocery
+Budget performance in 2024-01:
+
+               ||                 Jan 
+===============++=====================
+ <unbudgeted>  || $-150               
+ expenses:food ||  $150 [30% of $500] 
+---------------++---------------------
+               ||     0 [ 0% of $500] 

@@ -731,6 +731,12 @@ Here are more notes to help with learning and troubleshooting.
   It's common to restrict them to just expenses.
   (The `<unbudgeted>` account is occasionally hard to exclude; this is because of date surprises, discussed below.)
 
+- Only the account, account type, depth, date and commodity parts of the query
+  are applied to the budget goals; the other parts
+  (`status:`/`-U`/`-P`/`-C`, `code:`, `desc:`, `payee:`, `note:`, `tag:`, `real:`, `amt:`)
+  select actual transactions and postings only.
+  So eg `--budget --cleared` compares your cleared spending against the full budget goals.
+
 - When you have multiple currencies, you may want to convert them to
   one (`-X COMM --infer-market-prices`) and/or show just one at a time
   (`cur:COMM`).  If you do need to show multiple currencies at once,
