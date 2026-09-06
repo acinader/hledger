@@ -16,6 +16,8 @@ User-visible changes in the hledger command line tool and library.
 
 - In journal format, a single tab is also now accepted as the separator between account and amount, for improved compatibility with Ledger. This also means account names can no longer contain tab characters.
 
+- In CSV rules, when a directive like `date-format` or `separator` is declared more than once, the last declaration now takes effect, as the manual describes, rather than the first. (Except for `skip`, where the first declaration still wins, also as the manual describes.) This makes it possible to override an included rules file's directives by writing new declarations after the `include` line. If any of your rules files relied on the old undocumented behaviour, declaring a directive before an `include` to override the included file, you should move that declaration below the `include`. [#2539]
+
 - Config files can no longer specify the command to run via a bare first word in the general section. Since config files can now define command aliases (which can run shell commands), letting a config file also select the default command was too risky. The command to run must now always be given on the command line.
 
 - The `--tldr` flag has been renamed to `--examples`.

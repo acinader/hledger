@@ -1031,8 +1031,16 @@ regexp end = do
 
 _RULES_LOOKUP__________________________________________ = undefined
 
+-- | Look up the value of a top-level directive.
+-- If it is declared more than once, the last declaration wins,
+-- like most other rules (but see getDirectiveFirstWins).
 getDirective :: DirectiveName -> CsvRules -> Maybe FieldTemplate
-getDirective directivename = lookup directivename . rdirectives
+getDirective directivename = lookup directivename . reverse . rdirectives
+
+-- | Like getDirective, but if the directive is declared more than once,
+-- the first declaration wins. Used for the skip directive.
+getDirectiveFirstWins :: DirectiveName -> CsvRules -> Maybe FieldTemplate
+getDirectiveFirstWins directivename = lookup directivename . rdirectives
 
 -- | Look up the value (template) of a csv rule by rule keyword.
 csvRule :: CsvRules -> DirectiveName -> Maybe FieldTemplate
@@ -1243,7 +1251,7 @@ readJournalFromCsv rulesfile rules csvfile csvtext sep = do
     let csvlines1 = dbg9 "csvlines1" $ filter (not . T.null . T.strip) $ dbg9 "csvlines0" $ T.lines csvtext
 
     -- if there is a top-level skip rule, skip the specified number of non-empty lines
-    skiplines <- case getDirective "skip" rules of
+    skiplines <- case getDirectiveFirstWins "skip" rules of
                       Nothing -> return 0
                       Just "" -> return 1
                       Just s  -> maybe (throwError $ rulesfile <> ": could not parse skip value: " ++ T.unpack s) return . readMay $ T.unpack s

@@ -1233,6 +1233,43 @@ $  ./csvtest.sh
 
 >=
 
+# ** 64. When a directive is declared more than once, the last declaration wins. (#2539)
+<
+2000-01-01,withdraw,1.00
+RULES
+fields date,description,amount
+date-format %m/%d/%Y
+date-format %Y-%m-%d
+$  ./csvtest.sh
+2000-01-01 withdraw
+    expenses:unknown                               1.00
+    income:unknown                                -1.00
+
+>=
+
+# ** 65. Except for the skip directive, where the first declaration wins. (#2539)
+<
+junk line
+2000-01-01,withdraw,1.00
+RULES
+fields date,description,amount
+skip 1
+skip 2
+$  ./csvtest.sh
+2000-01-01 withdraw
+    expenses:unknown                               1.00
+    income:unknown                                -1.00
+
+>=
+
+# ** 66. A directive after an include overrides the included file's directive. (#2539)
+$ mkdir -p t2539.$$ && cd t2539.$$ && printf '2000-01-01,withdraw,1.00\n' >t.csv && printf 'fields date,description,amount\ndate-format %%m/%%d/%%Y\n' >common.rules && printf 'include common.rules\ndate-format %%Y-%%m-%%d\n' >t.rules && hledger -f csv:t.csv --rules t.rules print; s=$?; cd ..; rm -rf t2539.$$; exit $s
+2000-01-01 withdraw
+    expenses:unknown                               1.00
+    income:unknown                                -1.00
+
+>=
+
 # ** .
 #<
 #$  ./csvtest.sh

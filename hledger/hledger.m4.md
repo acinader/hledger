@@ -4334,6 +4334,10 @@ account2 expenses:misc
 include categorisation.rules
 ```
 
+Since included rules are effectively inlined, and since for most rules the
+last declaration wins, you can override an included file's rules by writing
+rules after the `include` line.
+
 ## Working with CSV
 
 Some tips:
@@ -4697,7 +4701,8 @@ If you get a confusing error while reading a CSV file, it may help to try to und
 2. Top level rules (`date-format`, `fields`, `newest-first`, `skip` etc) are read, top to bottom.
    "Top level rules" means non-conditional rules.
    If a rule occurs more than once, the last one wins;
-   except for `skip`/`end` rules, where the first one wins.
+   except for the `skip` rule, where the first one wins.
+   A rule written after an `include` would override the same rule in the included file.
 
 3. The CSV file is read as text.
    Any non-ascii characters will be decoded using the text encoding specified by the `encoding` rule,
