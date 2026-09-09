@@ -98,9 +98,8 @@ The special address `0.0.0.0` causes it to listen on all of this machine's addre
 Similarly, you can use `--port` to listen on a TCP port other than 5000.
 This is useful if you want to run multiple hledger-web instances on a machine.
 `--port 0` makes the operating system choose a free port, which is reported
-in the startup message and in the default base url. This can be useful eg
-when scripting; it is supported with `--serve` and `--serve-api`, but not
-with `--serve-browse`.
+in the startup message and in the default base url, and is where the browser
+is opened in `--serve-browse` mode. This can be useful eg when scripting.
 
 When `--socket` is used, hledger-web creates and communicates via a socket file instead of a TCP port.
 This can be more secure, respects unix file permissions, and makes certain use cases easier,

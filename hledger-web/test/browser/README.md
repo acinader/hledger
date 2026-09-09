@@ -15,8 +15,9 @@ highlighting.
   errors, and starting hledger-web.
 - `browse-mode.spec.js` — the default mode (no `--serve`), where each page pings
   the server while it is open so that it keeps serving. This spec starts a second
-  hledger-web on port 5089 (`HLEDGER_WEB_BROWSE_PORT`) with the browser launcher
-  stubbed; it is skipped on Windows, where the launch cannot be intercepted.
+  hledger-web, with `--port 0` and the browser launcher stubbed, and checks that
+  the browser is opened at the port the OS chose; it is skipped on Windows, where
+  the launch cannot be intercepted.
 
 Nothing here is part of `stack build` or `stack test`; the suite is opt-in and needs
 node only to run it.

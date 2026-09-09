@@ -119,13 +119,8 @@ web opts0 j = do
       staticRoot = T.pack <$> file_url_ opts  -- XXX not used #2139
 
   -- --port 0 means "let the operating system choose a free port". To learn which
-  -- port it chose (so we can report it and build the base url), we must bind the
-  -- listening socket ourselves rather than let warp do it. This isn't supported in
-  -- --serve-browse mode, which needs a known port up front to open the browser at.
-  when (p0 == 0 && socket_ opts == Nothing && server_mode_ opts == ServeBrowse) $
-    error' $ unlines  -- PARTIAL:
-      ["--port 0 (let the operating system choose a free port) is not supported with --serve-browse."
-      ,"Please use --serve or --serve-api instead, which will report the chosen port."]
+  -- port it chose (so we can report it, build the base url, and open the browser
+  -- there), we must bind the listening socket ourselves rather than let warp do it.
   mtcpsock <- if p0 == 0 && socket_ opts == Nothing
                 then Just <$> bindRandomPortTCP (fromString h)
                 else return Nothing
@@ -168,7 +163,7 @@ web opts0 j = do
       putStrLn "Opening web browser..."
       hFlush stdout
       -- returns normally only after the idle exit (ctrl-c or a server failure raises instead)
-      serveAndBrowse warpsettings u app
+      serveAndBrowse warpsettings (snd <$> mtcpsock) u app
       putStrLn "No browser windows were open for 2m, exiting. (Use --serve to serve without this timeout.)"
 
     else do
@@ -204,13 +199,16 @@ web opts0 j = do
 -- minutes. A page says it is open by pinging /_ping while it is (see
 -- browsePingInit in static/hledger.js). The pings are answered here, before
 -- they reach the app, and the time of the latest one is kept.
-serveAndBrowse :: Settings -> String -> Application -> IO ()
-serveAndBrowse warpsettings u app = do
+-- With --port 0 the listening socket is already bound (to the port the OS
+-- chose, which is the one in the url); serve on it rather than on host and port.
+serveAndBrowse :: Settings -> Maybe Socket -> String -> Application -> IO ()
+serveAndBrowse warpsettings msock u app = do
   lastping <- newIORef =<< getMonotonicTime
   let settings = setBeforeMainLoop (void $ forkIO $ void $ openBrowserOn u) warpsettings
+      serve = maybe (runSettings settings) (runSettingsSocket settings) msock
   -- Run these concurrently: when either one finishes or fails, so does the other.
   void $ race
-    (runSettings settings $ answerPings lastping app)
+    (serve $ answerPings lastping app)
     (waitForIdle lastping)
 
 -- | Answer /_ping with 204 No Content, noting the time; pass everything else to the app.

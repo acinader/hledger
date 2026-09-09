@@ -14,7 +14,7 @@ module.exports = async () => {
   fs.copyFileSync(path.join(__dirname, 'fixture.journal'), journal);
   process.env.BROWSER_JOURNAL = journal;
 
-  const child = await startServer(URL, [
+  const { child } = await startServer([
     '-f', journal, '--serve', '--host', '127.0.0.1', '--port', PORT, '--allow=edit',
   ]);
   fs.writeFileSync(path.join(os.tmpdir(), 'hledger-web-browser.pid'), String(child.pid));

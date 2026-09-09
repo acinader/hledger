@@ -61,8 +61,8 @@ Improvements
 
 - --port 0 lets the OS choose a free port [#2559] (Arthur Cinader).
   The chosen port is reported in the startup message and used in the
-  default base url, so scripts can discover it. Supported with --serve
-  and --serve-api.
+  default base url, so scripts can discover it; in the default
+  --serve-browse mode, the browser is opened there.
 
 - Add the -? and --webman flags; rename --tldr to --examples (see hledger changelog).
 
