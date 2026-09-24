@@ -113,7 +113,7 @@ GHCI := 'ghci'
 # command to run during profiling (time and heap)
 # command to run when profiling
 
-PROFCMD := 'bin/hledgerprof balance -f examples/10000x1000x10.journal >/dev/null'
+PROFCMD := 'bin/hledgerprof balance -f examples/10ktxns-1kaccts.journal >/dev/null'
 PROFRTSFLAGS := '-P'
 
 # # command to run when checking test coverage
@@ -230,9 +230,6 @@ BUILDFLAGS := '-rtsopts ' + WARNINGS + GHCLOWMEMFLAGS + CABALMACROSFLAGS + ' -DD
 #    -fhide-source-paths \
 # PROFBUILDFLAGS := '-prof -fprof-auto -osuf hs_p'
 
-TIME := "{{ shell date +'%Y%m%d%H%M' }}"
-MONTHYEAR := "{{ shell date +'%B %Y' }}"
-
 # ** Building ------------------------------------------------------------
 BUILDING:
 
@@ -249,11 +246,12 @@ BUILDING:
 #     mv bin/hledger "$exe"
 #     echo "$exe"
 
-# build hledger with profiling enabled at bin/hledgerprof
+# build hledger with profiling enabled at bin/hledgerprof (using stack-prof.yaml and its own work dir, see its header)
 hledgerprof:
     @echo "building bin/hledgerprof..."
-    {{ STACK }} install --profile --local-bin-path=bin hledger && mv bin/hledger{,prof}
-    @echo "to profile, use $STACK exec --profile -- hledger ..."
+    stack --stack-yaml stack-prof.yaml --work-dir .stack-prof install --library-profiling --executable-profiling --local-bin-path bin hledger
+    mv bin/hledger bin/hledgerprof
+    @echo "to profile, run: bin/hledgerprof CMD +RTS -p -RTS  (writes hledgerprof.prof), or use just quickprof"
 
 # # build "bin/hledgercov" for coverage reports (with ghc)
 # hledgercov:
@@ -631,7 +629,7 @@ samplejournals:
 # show throughput at various data sizes with the latest hledger dev build, optimised or not (requires samplejournals)
 @bench-throughput-dev:
     stack build hledger
-    stack exec -- just throughput hledger
+    stack exec -- just bench-throughput hledger
 
 # show throughput of recent hledger versions (requires samplejournals)
 @bench-throughput-recent:
@@ -678,24 +676,24 @@ samplejournals:
 #{{ STACK }} exec --profile -- hledger +RTS {{ PROFRTSFLAGS }} -RTS -f examples/1000x1000x10.journal {{ CMD }} #>/dev/null
 # run a hledger CMD against a sample journal and display the execution profile (build hledgerprof first)
 quickprof CMD: #hledgerprof #samplejournals
-    hledgerprof +RTS {{ PROFRTSFLAGS }} -RTS -f examples/10ktxns-1kaccts.journal {{ CMD }} #>/dev/null
-    @profiterole hledger.prof
+    bin/hledgerprof +RTS {{ PROFRTSFLAGS }} -RTS -f examples/10ktxns-1kaccts.journal {{ CMD }} #>/dev/null
+    @profiterole hledgerprof.prof
     @echo
-    @head -20 hledger.prof
+    @head -20 hledgerprof.prof
     @echo ...
     @echo
-    @head -20 hledger.profiterole.txt
+    @head -20 hledgerprof.profiterole.txt
     @echo ...
     @echo
-    @echo "See hledger.prof, hledger.profiterole.txt, hledger.profiterole.html for more."
+    @echo "See hledgerprof.prof, hledgerprof.profiterole.txt, hledgerprof.profiterole.html for more."
 
 # generate and archive a graphical heap profile
 @heap: hledgerprof #samplejournals
     echo "Profiling heap with: $PROFCMD"
     {{ PROFCMD }} +RTS -hc -RTS
-    mv hledgerprof.hp doc/profs/$(TIME).hp
-    (cd doc/profs; rm -f latest.hp; ln -s {{ TIME }}.hp latest.hp; \
-        hp2ps {{ TIME }}.hp; rm -f latest.ps; ln -s {{ TIME }}.ps latest.ps; rm -f *.aux)
+    t=$(date +%Y%m%d%H%M); mv hledgerprof.hp doc/profs/$t.hp; cd doc/profs; \
+        rm -f latest.hp; ln -s $t.hp latest.hp; \
+        hp2ps $t.hp; rm -f latest.ps; ln -s $t.ps latest.ps; rm -f *.aux
 
 # viewheap: heap \
 # 	$(call def-help,viewheap,\

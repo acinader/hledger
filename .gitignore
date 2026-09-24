@@ -94,6 +94,7 @@ old
 *.log
 /profs/*
 /*.prof.*
+/*.profiterole.*
 /tmp
 /bench*
 
