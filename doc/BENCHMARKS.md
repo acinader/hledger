@@ -32,8 +32,8 @@ $ just bench-throughput-recent   # with recent installed hledger versions
 ## Performance test
 
 `just perftest` runs [hledger/test/_perf.test](https://github.com/hledgerorg/hledger/blob/main/hledger/test/_perf.test),
-which logs `hledger stats` throughput to `perf.log` (kept locally, for spotting changes over time)
-and fails if throughput is below a threshold.
+which logs `hledger stats` throughput to `perf.log` (kept locally, for spotting changes over time),
+tagging each line with the machine's CPU model, and fails if throughput is below a threshold.
 
 ## Profiling
 
