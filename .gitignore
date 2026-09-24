@@ -96,7 +96,7 @@ old
 /*.prof.*
 /*.profiterole.*
 /tmp
-/bench*
+/bench/*
 
 #/bin - see bin/.gitignore
 

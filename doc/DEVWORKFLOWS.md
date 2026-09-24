@@ -106,7 +106,7 @@ Runs the test suites defined by each hledger package (unit tests, doctests).
 
 ## Run benchmarks
 
-Times the end-user commands in `bench.sh` using quickbench:
+Times the end-user commands in `bench/bench.sh` using quickbench:
 
     just bench
 

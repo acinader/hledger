@@ -574,10 +574,10 @@ samplejournals:
 #    tools/generatejournal.hs 3 5 5 --chinese > examples/chinese.journal  # don't regenerate, keep the simple version
 # $ just --set BENCHEXES ledger,hledger  bench
 
-# run the benchmark commands in bench.sh with quickbench. Eg: just bench -h; just bench -f bench10k.sh -w hledger-1.30,hledger-1.31,hledger-1.32 -n2 -N2
+# run the benchmark commands in bench/bench.sh (or another -f file) with quickbench. Eg: just bench -h; just bench -f bench/bench10k.sh -w hledger-1.30,hledger-1.31,hledger-1.32 -n2 -N2
 @bench *ARGS:
     printf "Running quick benchmarks (times are approximate, can be skewed):\n"
-    which quickbench >/dev/null && quickbench {{ ARGS }} || echo "quickbench not installed (see bench.sh), skipping"
+    which quickbench >/dev/null && quickbench {{ if ARGS =~ '(^| )(-f|--file)' { ARGS } else { "-f bench/bench.sh " + ARGS } }} || echo "quickbench not installed (see bench/bench.sh), skipping"
 
 # @bench-gtime:
 #     for args in '-f examples/10ktxns-1kaccts.journal print' '-f examples/100ktxns-1kaccts.journal register' '-f examples/100ktxns-1kaccts.journal balance'; do \
@@ -609,11 +609,11 @@ samplejournals:
     for v in 1.25 1.40 1.52 1.99.4; do printf "\nhledger-$v:\n"; for i in `seq 1 3`; do hledger-$v -f examples/10ktxns-10kaccts.journal stats | grep ^Run; done; done
 
 # @bench-balance-many-accts:
-#     quickbench -w hledger-1.26,hledger-21ad,ledger -f bench-many-accts.sh -N2
-#     #quickbench -w hledger-1.25,hledger-1.28,hledger-1.29,hledger-1.30,hledger-1.31,hledger-1.32,hledger-21ad,ledger -f bench-many-accts.sh -N2
+#     quickbench -w hledger-1.26,hledger-21ad,ledger -f bench/bench-many-accts.sh -N2
+#     #quickbench -w hledger-1.25,hledger-1.28,hledger-1.29,hledger-1.30,hledger-1.31,hledger-1.32,hledger-21ad,ledger -f bench/bench-many-accts.sh -N2
 # @bench-balance-many-txns:
-#     quickbench -w hledger-21ad,ledger -f bench-many-txns.sh -N2
-# samplejournals bench.sh
+#     quickbench -w hledger-21ad,ledger -f bench/bench-many-txns.sh -N2
+# samplejournals bench/bench.sh
 # bench: samplejournals tests/bench.tests tools/simplebench \
 #   $(call def-help,bench,\
 # 	run simple performance benchmarks and archive results\
