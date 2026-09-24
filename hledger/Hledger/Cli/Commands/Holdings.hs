@@ -35,7 +35,7 @@ import Text.Printf (printf)
 
 import Hledger
 import Hledger.Cli.CliOptions
-import Hledger.Cli.Commands.Balance (addTotalBorders, renderPeriodicAcct)
+import Hledger.Cli.Commands.Balance.Internal (addTotalBorders, renderPeriodicAcct)
 import Hledger.Cli.Commands.Print (roundFromRawOpts)
 import Hledger.Cli.Utils (unsupportedOutputFormatError, writeOutputLazyText)
 import Hledger.Write.Csv (CSV, printCSV, printTSV)

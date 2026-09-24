@@ -99,8 +99,7 @@ getBalanceR = do
                 let mbr = styleAmounts (journalCommodityStylesWith HardRounding j) $
                             multiBalanceReport rspec j
                 in ( maybe (trimColon $ Balance.multiBalanceReportTitle ropts mbr) id (title_ ropts)
-                   , Balance.multiBalanceReportAsSpreadsheetParts oneLineNoCostFmt ropts
-                       (Balance.allCommoditiesFromPeriodicReport $ prRows mbr) mbr
+                   , Balance.multiBalanceReportAsSpreadsheetParts oneLineNoCostFmt ropts mbr
                    )
         Yesod.toWidget $ H.h2 $ H.toHtml $ title <> filtered
         Yesod.toWidget $ balanceReportLinks BalanceR qparam spn reportinterval

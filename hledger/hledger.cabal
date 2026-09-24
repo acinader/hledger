@@ -146,6 +146,7 @@ library
       Hledger.Cli.Utils
       Hledger.Cli.Version
   other-modules:
+      Hledger.Cli.Commands.Balance.Internal
       Paths_hledger
   autogen-modules:
       Paths_hledger

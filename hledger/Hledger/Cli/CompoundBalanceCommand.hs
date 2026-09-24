@@ -40,6 +40,7 @@ import Hledger
 import Hledger.Cli.Commands.Balance
 import Hledger.Cli.CliOptions
 import Hledger.Cli.Utils (unsupportedOutputFormatError, writeOutputLazyText)
+import Hledger.Cli.Commands.Balance.Internal
 import Hledger.Write.Csv (CSV, printCSV, printTSV)
 import Hledger.Write.Html (formatRow, formatTitle, htmlAsLazyText, nl, Html, toHtml)
 import Hledger.Write.Html.Attribute (stylesheet, tableStyle)
@@ -418,7 +419,7 @@ compoundBalanceReportAsSpreadsheet fmt accountLabel maybeBlank ropts cbr =
     subreportrows (subreporttitle, mbr, _increasestotal) =
       let
         (_, bodyrows, mtotalsrows) =
-          multiBalanceReportAsSpreadsheetParts fmt ropts allCommodities mbr
+          balanceSubReportAsSpreadsheetParts fmt ropts allCommodities mbr
         accountCell =
             (Spr.defaultCell subreporttitle) {
                 Spr.cellStyle = Spr.Body Spr.Total,
@@ -457,7 +458,7 @@ compoundBalanceReportAsSpreadsheet fmt accountLabel maybeBlank ropts cbr =
 -- | All commodities appearing in any of these subreports, sorted.
 -- Used as the commodity column order for LayoutBareWide across the whole
 -- compound report; it must cover every row rendered, including the totals
--- row, see 'setDisplayCommodityBare' in "Hledger.Cli.Commands.Balance".
+-- row, see 'setDisplayCommodityBare' in "Hledger.Cli.Commands.Balance.Internal".
 allCommoditiesFromSubreports ::
     [(text, PeriodicReport a MixedAmount, bool)] -> [CommoditySymbol]
 allCommoditiesFromSubreports =
