@@ -215,10 +215,9 @@ labels.
 - `stack --profile` on GHC 9.14.1 panics compiling tls; use `stack --stack-yaml stack-prof.yaml
   --work-dir .stack-prof install --library-profiling --executable-profiling --local-bin-path bin
   hledger` (see BENCHMARKS.md). Profiles from this session are archived under doc/profs/202609*.
-- `.stack-rtsopts` is a scratch work dir built with `--ghc-options=-rtsopts` for `+RTS` experiments
-  (the shipped binary allows `+RTS -s` but not `-A`/`-F`/`-xn`). `stack --work-dir .stack-rtsopts
-  path --local-install-root` gives its bin directory.
+- For `+RTS` experiments, build in a scratch work dir with `--ghc-options=-rtsopts`, eg
+  `stack --work-dir .stack-rtsopts build --ghc-options=-rtsopts hledger` (the shipped binary
+  allows `+RTS -s` but not `-A`/`-F`/`-xn`); `stack --work-dir .stack-rtsopts path
+  --local-install-root` gives its bin directory.
 - `just functest` rebuilds with -Werror, so don't `stack build` in parallel with it.
 - quickbench needs the binaries on PATH; `hledger-1.99.4` on PATH is the pre-optimisation reference.
-- Scratch stack-mp922.yaml at the repo root builds main against megaparsec 9.2.2 for the regression
-  comparison; deletable with .stack-mp922.
