@@ -1848,11 +1848,11 @@ TAGFILES := WEBTEMPLATEFILES + DOCSOURCEFILES + TESTFILES + HPACKFILES + CABALFI
 # generate emacs TAGS file for haskell source and other project files, and list the tagged files in TAGS.files
 @etags:
     hasktags -e $SOURCEFILES
-    for f in $TAGFILES; do printf "\n$f,1\n" >>TAGS; done
+    for f in $TAGFILES; do printf "\f\n$f,1\n" >>TAGS; done
 
 # list the files tagged in TAGS
 @etags-ls:
-    rg -v '[ ]' TAGS | rg -r '$1' '^(.*?([0-9]+)?),[0-9,]+*'
+    rg -v '[\f\x7f ]' TAGS | rg -r '$1' '^(.*?([0-9]+)?),[0-9,]+*'
 
 # remove TAGS files
 @etags-clean:
