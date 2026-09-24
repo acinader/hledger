@@ -56,8 +56,8 @@ aregistermode = hledgerCommandMode
      (accumprefix ++ "show running total from report start date")
   ,flagNone ["historical","H"] (setboolopt "historical")
      (accumprefix ++ "show historical running total/balance (includes postings before report start date) (default)")
-  -- ,flagNone ["average","A"] (setboolopt "average")
-  --    "show running average of posting amounts instead of total (implies --empty)"
+  ,flagNone ["average","A"] (setboolopt "average")
+     "show running average of transaction amounts instead of balance (implies --empty and, unless -H is used, --cumulative)"
   ,flagNone ["related","r"] (setboolopt "related") "show the other accounts in each transaction (default)"
   ,flagNone ["matched"] (setboolopt "matched") "show the matched accounts (this account or its subaccounts) instead"
   ,flagNone ["invert"] (setboolopt "invert") "display all amounts with reversed sign"
@@ -103,13 +103,18 @@ aregister opts@CliOpts{rawopts_=rawopts,reportspec_=rspec} j = do
     -- gather report options
     inclusive = True  -- tree_ ropts
     thisacctq = Acct $ (if inclusive then accountNameToAccountRegex else accountNameToAccountOnlyRegex) acct
-    ropts' = (_rsReportOpts rspec) {
+    ropts = _rsReportOpts rspec
+    ropts' = ropts {
         -- ignore any depth limit, as in postingsReport; allows register's total to match balance reports (cf #1468)
         depth_=DepthSpec Nothing []
+        -- historical by default, or cumulative with --average (averaging over the report period, like register)
       , balanceaccum_ =
-          case balanceaccum_ $ _rsReportOpts rspec of
-            PerPeriod -> Historical
+          case balanceaccum_ ropts of
+            PerPeriod | average_ ropts -> Cumulative
+                      | otherwise      -> Historical
             ba -> ba
+        -- with --average, show all transactions, since they all affect the average
+      , empty_ = empty_ ropts || average_ ropts
       , querystring_ = querystr
       }
     wd = whichDate ropts'

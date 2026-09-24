@@ -16,6 +16,9 @@ Flags:
   -H --historical           accumulation mode: show historical running
                             total/balance (includes postings before report
                             start date) (default)
+  -A --average              show running average of transaction amounts
+                            instead of balance (implies --empty and, unless -H
+                            is used, --cumulative)
   -r --related              show the other accounts in each transaction
                             (default)
      --matched              show the matched accounts (this account or its
@@ -89,6 +92,14 @@ The amounts and running balance are the same in both modes.
 
 Transactions making a net change of zero are not shown by default;
 add the `-E/--empty` flag to show them.
+
+The `-A/--average` flag shows the running average change per transaction,
+instead of the running balance, so the last number shown is the average
+for the whole report period. It implies `--empty`, since zero-change transactions
+also affect the average. Unlike aregister's other reports, it is not
+historical by default; add `-H` to include the transactions before the report
+start date in the average. Like [`register -A`](#register), it works best
+with a single commodity.
 
 For performance reasons, column widths are chosen based on the first 1000 lines;
 this means unusually wide values in later lines can cause visual discontinuities

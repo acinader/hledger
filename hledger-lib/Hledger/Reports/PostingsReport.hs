@@ -15,6 +15,7 @@ module Hledger.Reports.PostingsReport (
   PostingsReportItem,
   postingsReport,
   mkpostingsReportItem,
+  registerRunningCalculationFn,
   SortSpec,
   defsortspec,
 
