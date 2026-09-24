@@ -8,7 +8,9 @@ module Hledger.Web.Widget.Common
   ( accountQuery
   , accountOnlyQuery
   , balanceReportAsHtml
-  , balanceReportLinks
+  , linksRow
+  , intervalLinks
+  , accumulationLinks
   , helplink
   , mixedAmountAsHtml
   , fromFormSuccess
@@ -35,6 +37,7 @@ import Text.Printf (printf)
 import Yesod
 
 import Hledger
+import Hledger.Cli.Anchor qualified as Anchor
 import Hledger.Cli.Utils (writeFileWithBackupIfChanged)
 import Hledger.Web.Settings (manualurl)
 import Hledger.Query qualified as Query
@@ -89,36 +92,53 @@ balanceReportAsHtml (journalR, registerR) here hideEmpty j qparam qopts (items, 
       where isInteresting a = not (all (mixedAmountLooksZero . bdexcludingsubs) . pdperiods $ adata a) || any isInteresting (asubs a)
     matchesAcctSelector acct = Just True == ((`matchesAccount` acct) <$> inAccountQuery qopts)
 
--- | Links to the balance report page, single-period and for each
--- interval, carrying the current search and date span; the report being
--- shown, identified by the interval it was built with, is marked.
-balanceReportLinks :: r -> Text -> DateSpan -> Interval -> HtmlUrl r
-balanceReportLinks balanceR qparam spn current =
-  $(hamletFile "templates/balance-links.hamlet")
+-- | A row of links above a report: a label, then each link's label,
+-- title, target, and whether it is the one being shown.
+-- Each label and title is a whole phrase, not a word slotted into a
+-- sentence: an adjective that fits one language's sentence does not fit
+-- another's, so a translation cannot be assembled from parts.
+linksRow :: Text -> [(Text, Text, (r, [(Text, Text)]), Bool)] -> HtmlUrl r
+linksRow rowlabel items = $(hamletFile "templates/balance-links.hamlet")
+
+-- | Links to the same report page for each reporting interval, keeping
+-- the search, the period's date span, and the given parameters; the
+-- interval being shown is marked.
+intervalLinks :: r -> [(Text, Text)] -> Text -> DateSpan -> Interval -> HtmlUrl r
+intervalLinks route kept qparam spn current =
+  linksRow "Interval:"
+    [ (label, title, link mword, ivl == current) | (label, title, mword, ivl) <- intervals ]
   where
-    -- Each link's label and title is a whole phrase, not a word slotted
-    -- into a sentence: an adjective that fits one language's sentence does
-    -- not fit another's, so a translation cannot be assembled from parts.
-    reports :: [(Text, Text, Maybe Text, Interval)]
-    reports =
-      [ ("Balance",   "Show the balance report",           Nothing,          NoInterval)
-      , ("Yearly",    "Show the yearly balance report",    Just "yearly",    Years 1)
-      , ("Quarterly", "Show the quarterly balance report", Just "quarterly", Quarters 1)
-      , ("Monthly",   "Show the monthly balance report",   Just "monthly",   Months 1)
-      , ("Weekly",    "Show the weekly balance report",    Just "weekly",    Weeks 1)
-      , ("Daily",     "Show the daily balance report",     Just "daily",     Days 1)
+    intervals :: [(Text, Text, Maybe Text, Interval)]
+    intervals =
+      [ ("None",      "Show one column for the whole period", Nothing,          NoInterval)
+      , ("Yearly",    "Show a column per year",               Just "yearly",    Years 1)
+      , ("Quarterly", "Show a column per quarter",            Just "quarterly", Quarters 1)
+      , ("Monthly",   "Show a column per month",              Just "monthly",   Months 1)
+      , ("Weekly",    "Show a column per week",               Just "weekly",    Weeks 1)
+      , ("Daily",     "Show a column per day",                Just "daily",     Days 1)
       ]
     -- Each link keeps the period's date span, so that changing the
     -- interval does not silently widen the report to the whole journal.
     -- "monthly 2025-01-01..2025-12-31" is a period expression like any other.
-    spantext = if spn == nulldatespan then "" else showDateSpan spn
+    spantext = if spn == nulldatespan then "" else showDateSpanForQuery spn
     periodparam mword = case (mword, spantext) of
       (Nothing,   "") -> []
       (Nothing,   sp) -> [("period", sp)]
       (Just w,    "") -> [("period", w)]
       (Just w,    sp) -> [("period", w <> " " <> sp)]
     link mword =
-      (balanceR, periodparam mword ++ [("q", qparam) | not (T.null qparam)])
+      (route, periodparam mword ++ [("q", qparam) | not (T.null qparam)] ++ kept)
+
+-- | Links to the same report page showing balance changes or ending
+-- balances, keeping the given parameters; the one being shown is marked.
+accumulationLinks :: r -> [(Text, Text)] -> BalanceAccumulation -> HtmlUrl r
+accumulationLinks route kept current =
+  linksRow "Show:"
+    [ ("Balance changes", "Show how much each balance changed in each period",
+        (route, kept), current /= Historical)
+    , ("Ending balances", "Show each balance at the end of each period, including everything before it",
+        (route, kept ++ [("accum", "historical")]), current == Historical)
+    ]
 
 accountQuery :: AccountName -> Text
 accountQuery = ("inacct:" <>) .  quoteIfSpaced
@@ -146,19 +166,13 @@ transactionFragment j Transaction{tindex, tsourcepos} =
     -- or 0 if this txn has no known file (eg a forecasted txn)
     tfileindex = maybe 0 (+1) $ elemIndex (sourceName $ fst tsourcepos) (journalFilePaths j)
 
+-- | The search's terms without its date terms, each quoted if it needs to be.
 removeDates :: Text -> [Text]
-removeDates =
-    map quoteIfSpaced .
-    filter (\term ->
-        not $ T.isPrefixOf "date:" term || T.isPrefixOf "date2:" term) .
-    Query.words'' queryprefixes
+removeDates = map quoteIfSpaced . Anchor.removeDates . Query.words'' queryprefixes
 
+-- | The search's terms without those naming an account, each quoted if it needs to be.
 removeInacct :: Text -> [Text]
-removeInacct =
-    map quoteIfSpaced .
-    filter (\term ->
-        not $ T.isPrefixOf "inacct:" term || T.isPrefixOf "inacctonly:" term) .
-    Query.words'' queryprefixes
+removeInacct = map quoteIfSpaced . Anchor.removeInacct . Query.words'' queryprefixes
 
 replaceInacct :: Text -> Text -> Text
 replaceInacct q acct = T.unwords $ acct : removeInacct q
