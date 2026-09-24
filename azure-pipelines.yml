@@ -22,7 +22,6 @@ trigger:
     - cabal-install.sh
     - cabal.project
     - checks/*
-    - dev.hs
     - doc/*
     - examples/*
     - hledger-system.mk

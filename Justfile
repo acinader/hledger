@@ -144,7 +144,6 @@ MAIN := 'hledger/app/hledger-cli.hs'
 # Used eg for building tags. Doesn't reliably catch all source files.
 
 SOURCEFILES := '
-    dev.hs
     hledger/*hs
     hledger/app/*hs
     hledger/bench/*hs
@@ -330,10 +329,6 @@ TESTING:
 @ghcitui *GHCITUIARGS:
     ghcitui --cmd "just ghci"
 
-# # run ghci on hledger-lib + hledger + dev.hs script
-# @ghci-dev:
-#     $STACK exec -- $GHCI $BUILDFLAGS -fno-warn-unused-imports -fno-warn-unused-binds dev.hs
-
 # run ghci on hledger-lib + hledger + hledger-ui
 @ghci-ui *GHCIARGS:
     $STACK exec -- $GHCI $BUILDFLAGS {{ GHCIARGS }} hledger-ui/app/hledger-ui.hs
@@ -364,28 +359,6 @@ TESTING:
 # run ghci on Shake.hs
 @ghci-shake:
     $STACK exec {{ SHAKEDEPS }} -- ghci Shake.hs
-
-# #    hledger-lib/Hledger/Read/TimeclockReaderPP.hs
-# # build the dev.hs script for quick experiments (with ghc)
-# dev:
-#     $STACK ghc -- {{ CABALMACROSFLAGS }} -ihledger-lib dev.hs \
-# # to get profiling deps installed, first do something like:
-# # stack build --library-profiling hledger-lib timeit criterion
-# # build the dev.hs script with profiling support
-# devprof:
-#     $STACK ghc -- {{ CABALMACROSFLAGS }} -ihledger-lib dev.hs -rtsopts -prof -fprof-auto -osuf p_o -o devprof
-# # get a time & space profile of the dev.hs script
-# dev-profile:
-#     time ./devprof +RTS -P \
-#     && cp devprof.prof devprof.prof.{{ TIME }} \
-#     && profiterole devprof.prof
-# # get heap profiles of the dev.hs script
-# dev-heap:
-#     time ./devprof +RTS -hc -L1000 && cp devprof.hp devprof-hc.hp && hp2ps devprof-hc.hp
-#     time ./devprof +RTS -hr -L1000 && cp devprof.hp devprof-hr.hp && hp2ps devprof-hr.hp
-# dev-heap-upload:
-#     curl -F "file=@devprof-hc.hp" -F "title='hledger parser'" http://heap.ezyang.com/upload
-#     curl -F "file=@devprof-hr.hp" -F "title='hledger parser'" http://heap.ezyang.com/upload
 
 # run most tests (files, unit, doc, functional). doctest is slow, requiring its own build.
 test:

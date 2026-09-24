@@ -62,8 +62,3 @@ evaluation of the pipeline, but the totals closely match normal runs. One conseq
 a normal run leaves unevaluated is charged too, eg inferred market prices, which only valuation
 uses, appear as a cost of every command. Allocation figures are deterministic, so they are a
 reliable guide even on a busy machine.
-
-## Fine-grained measurements
-
-For quick, fine-grained measurements when troubleshooting or optimising, see
-[dev.hs](https://github.com/hledgerorg/hledger/blob/main/dev.hs) in the top directory.
