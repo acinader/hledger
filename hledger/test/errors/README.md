@@ -151,7 +151,7 @@ Here are some current limitations of hledger's error messages:
 ## Error messages
 
 Here is the current status as of
-hledger (see version below) and flycheck-hledger 0.3.0 (d52a85b, 2024-10), plus [PR #27](https://github.com/DamienCassou/flycheck-hledger/pull/27).
+hledger (see version below) and flycheck-hledger 1.1.0.
 Click error names to see an example. The table headings mean:
 
 - std format - the error message follows our standard error format
