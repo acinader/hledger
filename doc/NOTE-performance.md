@@ -3,26 +3,29 @@
 Working notes: the ranked list of performance ideas not yet tried, kept between sessions.
 Measurements, lessons learned and how to measure are in [PERFORMANCE](PERFORMANCE.md);
 the September 2026 optimisation commits are listed by `git log --grep='^perf:'`.
-Numbers below are for `hledger balance` on examples/100ktxns-1kaccts.journal (about 1.7s on a
-MacBook Pro M5 Pro in late 2026-09, with 152 MB max residency).
+Numbers below are for `hledger balance` on examples/100ktxns-1kaccts.journal (about 1.4s on a
+MacBook Pro M5 Pro in late 2026-09, with about 150 MB of live data).
 A lot-using variant for idea 3 can be generated with tools/_100k-lots-journal.py (local, untracked).
 
 Done in 2026-09: the megaparsec regression (fixed upstream in megaparsec 9.8.3, via our
-[megaparsec#613](https://github.com/mrkkrp/megaparsec/pull/613); pinned in all stack configs),
-and the residency reductions (strict parser accumulators, shared amount styles, account names and
-commodity symbols: 2.6 -> 1.5 KB per transaction).
+[megaparsec#613](https://github.com/mrkkrp/megaparsec/pull/613); pinned in all stack configs);
+the residency reductions (strict parser accumulators, shared amount styles, account names and
+commodity symbols: 2.6 -> 1.5 KB per transaction); cheaper cost annotation parsing; and the
+parser fast path for simple transactions and prices (parse 0.92 -> 0.63s, allocation halved).
 
 ## Remaining ideas, ranked
 
 Expected gains are for the 100k balance run; "general" means every command pays it.
 
-1. Parser, 60% of the run (1.0s): a hand-written fast path for the common posting, date and number
-   shapes would bypass megaparsec's per-token overhead, with the general parser as fallback.
-   The biggest remaining target, but it means a second parser to keep consistent.
-2. Report side, per command: the balance command is 0.31s (18%), mostly building the account tree
+1. Report side, per command: the balance command is 0.24s (17%), mostly building the account tree
    (HashMap update and period data insertion per posting), and it computes amount widths more than
    once. print's own rendering is about 0.9s at 100k, and is shared by exports, hledger-ui and
    hledger-web: profile it.
+2. Parser fast path, further: measure its hit rate on real journals (`HLEDGER_FASTPATH=off` for
+   comparison); entries with a same-line comment or tags, or digit-grouped numbers, decline now
+   and could be accepted with more scanning code. The remaining 0.63s parse is now roughly half
+   fast path (scanning, building and interning) and half declined entries plus the per-item
+   dispatch, blank lines and item recording.
 3. Remaining lot overhead on lot journals, ~0.36s: calculateLots still sorts, rebuilds and re-ties
    every transaction (0.135s); basis-from-account-name and transacted-cost inference search every
    account name (0.07s); commodity tags, method coherence.
