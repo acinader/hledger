@@ -239,6 +239,13 @@ so `stack bench hledger` does nothing; to use it, enable it there.
 - Some runtime flags trade memory for time: `-xn` (the non-moving collector) saved 10% of the run
   time but raised peak memory from 0.8 to 1.3 GB; `-xn -F3` saved 13% for 24% more; `-F4` 6% for 32%
   more. Not adopted as defaults.
+- The compacting collector (`+RTS -c`) trades the other way. It compacts live data in place instead
+  of copying it, so the runtime needs about twice the live data instead of nearly three times, but
+  garbage collection takes 2.5-3 times as long. On the 100k journal: 382 instead of 491 MB peak RSS
+  (-22%), 2.30 instead of 1.65s (+40%). On the 1M journal: 3.2 instead of 5.4 GB (-41%), 25.6 instead
+  of 15.7s (+63%). A `-M` cap enables compaction automatically as the heap nears it: the 1M journal
+  finished with `-M3g` in 3.3 GB and 24.6s, and failed with `-M2500m` after 43s. Recommended in the
+  manual for users short of memory, not as a default.
 - Compiling with `-fexpose-all-unfoldings -fspecialise-aggressively` gave only 4%, for a much longer
   build. Not adopted.
 

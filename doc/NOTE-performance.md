@@ -29,9 +29,9 @@ Expected gains are for the 100k balance run; "general" means every command pays 
 4. Small finalise stages, ~1-2% each: style inference (0.04s), account types (plus the regex
    fallback on every untyped-account lookup, accountNameInferType), cost tagging.
 5. Remaining memory: the steady state is mostly postings, amounts and their maps, transactions,
-   and descriptions (slices of the input text, which keep it alive). The compacting collector
-   (`+RTS -c`) could reduce total memory in use towards the live data size; users can now try it,
-   since the executables accept RTS options. Worth measuring before recommending.
+   and descriptions (slices of the input text, which keep it alive). (The compacting collector,
+   `+RTS -c`, was measured: 20-40% less memory for 40-60% more time; see PERFORMANCE. It's now
+   suggested in the manual for users short of memory.)
 6. Order of magnitude, not incremental: an on-disk cache of the finalised journal keyed by file
    contents and finalising options, skipping most of the run on unchanged journals; big feature
    with invalidation risks (includes, config, -I and friends, CSV/timeclock inputs). Parallel

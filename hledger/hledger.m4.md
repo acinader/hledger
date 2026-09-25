@@ -7835,6 +7835,9 @@ When processing large data files, hledger uses more memory than Ledger.
 You can cap its memory use with GHC runtime system options, eg `hledger +RTS -M2G -RTS ...`
 (if it needs more, it will stop with an error),
 and see memory and garbage collection statistics with `+RTS -s -RTS`.
+To use less memory at some cost in speed, add `+RTS -c -RTS` to use the compacting garbage collector;
+on large journals this can reduce memory use by 20-40%, while running 40-60% slower.
+(A RTS `-M` limit also enables this automatically, as memory use approaches the limit.)
 
 ## Troubleshooting
 
