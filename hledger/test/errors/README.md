@@ -72,7 +72,7 @@ then open the data files to see how flycheck handles them.
 [hledger check]:         https://hledger.org/hledger.html#check
 [flycheck-hledger-home]: https://github.com/DamienCassou/flycheck-hledger
 [flycheck-hledger-10]:   https://github.com/DamienCassou/flycheck-hledger/pull/10
-[flycheck-hledger]:      https://hledger.org/editors.html#flycheck-hledger
+[flycheck-hledger]:      https://hledger.org/emacs.html#flycheck-hledger
 
 
 ## Error improvement
