@@ -824,13 +824,14 @@ expandPathPreservingPrefix d prefixedf = do
     Nothing -> f'
 
 -- | Get the expanded, absolute output file path specified by an
--- -o/--output-file options, or nothing, meaning stdout.
+-- -o/--output-file options, or nothing, meaning stdout (also when the path is "-").
 outputFileFromOpts :: CliOpts -> IO (Maybe FilePath)
 outputFileFromOpts opts = do
   d <- getCurrentDirectory
   case output_file_ opts of
-    Nothing -> return Nothing
-    Just f  -> Just <$> expandPath d f
+    Nothing  -> return Nothing
+    Just "-" -> return Nothing
+    Just f   -> Just <$> expandPath d f
 
 defaultOutputFormat :: String
 defaultOutputFormat = "txt"
