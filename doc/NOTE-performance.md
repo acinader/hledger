@@ -47,3 +47,7 @@ region (ghc-compact) so the GC stops copying it: `compactWithSharing` is needed 
 and its texts are slices of the input) and takes 1.3s for the 100k journal, three times what the GC
 copying costs, and it comes after the memory peak. It might still suit hledger-web and hledger-ui,
 which keep a journal loaded through many collections.
+Also: recording journal items (jitems, for print --export) only on request. Measured with a
+keep_items_ input option: the items cost about 60 bytes per transaction plus 70 per top-level
+comment or directive line, so skipping them saved 5% of live data on the 100k journal (which has a
+P directive per transaction) but only 2% without those directives; not worth a new option.
