@@ -154,7 +154,7 @@ import System.Info (os)
 import System.IO (Handle, hPutStrLn, stderr)
 
 import Hledger.Data.Dates (getCurrentDay)
-import Hledger.Data.Journal (journalNumberTransactions, nulljournal)
+import Hledger.Data.Journal (journalNumberAndTieTransactions, nulljournal)
 import Hledger.Data.JournalChecks (journalStrictChecks)
 import Hledger.Data.Types
 import Hledger.Read.Common
@@ -356,7 +356,7 @@ readPossibleJournalFiles iopts pfs = case pfs of
     let iopts' = iopts{_defer=True}
     j1 <- readPossibleJournalFile iopts' f
     js <- mapM (readJournalFile iopts') fs
-    let combined = journalNumberTransactions $ sconcat (j1 :| js)
+    let combined = journalNumberAndTieTransactions $ sconcat (j1 :| js)
     when (strict_ iopts) $ liftEither $ journalStrictChecks combined
     return combined
 
@@ -389,12 +389,12 @@ readJournalFiles iopts@InputOpts{strict_, new_, new_save_} prefixedfiles = do
 -- The implementation of readJournalFiles.
 -- With --new, it also returns the latest transaction date(s) read in each file
 -- (used by the import command).
--- This also renumbers the transactions, ensuring their tindex values are unique;
+-- This also renumbers the transactions if needed, ensuring their tindex values are unique;
 -- that's also done elsewhere, but some code (accountTransactionsReport) needs it done sooner.
 readJournalFilesAndLatestDates :: InputOpts -> [PrefixedFilePath] -> ExceptT String IO (Journal, [LatestDatesForFile])
 readJournalFilesAndLatestDates iopts pfs = do
   (js, lastdates) <- unzip <$> mapM (readJournalFileAndLatestDates iopts) pfs
-  return (journalNumberTransactions $ maybe def sconcat $ nonEmpty js, catMaybes lastdates)
+  return (journalNumberAndTieTransactions $ maybe def sconcat $ nonEmpty js, catMaybes lastdates)
 
 -- | An easy version of 'readJournal' which assumes default options, and fails in the IO monad.
 readJournal' :: Handle -> IO Journal

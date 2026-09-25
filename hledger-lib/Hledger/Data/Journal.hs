@@ -1220,7 +1220,14 @@ journalSetLastReadTime :: POSIXTime -> Journal -> Journal
 journalSetLastReadTime t j = j{ jlastreadtime = t }
 
 
-journalNumberAndTieTransactions = journalTieTransactions . journalNumberTransactions
+-- | Number this journal's transactions, counting upward from 1, and tie their knots,
+-- so that their postings refer to the renumbered transactions.
+-- If they are already numbered that way, the journal is returned unchanged
+-- (avoiding a new copy of every transaction).
+journalNumberAndTieTransactions :: Journal -> Journal
+journalNumberAndTieTransactions j@Journal{jtxns=ts}
+  | and $ zipWith (\i t -> tindex t == i) [1..] ts = j
+  | otherwise = journalTieTransactions $ journalNumberTransactions j
 
 -- | Number (set the tindex field) this journal's transactions, counting upward from 1.
 journalNumberTransactions :: Journal -> Journal
