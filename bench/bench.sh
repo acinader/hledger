@@ -20,13 +20,12 @@
 
 # commands to benchmark:
 
-#hledger -f examples/10ktxns-1kaccts.journal stats
-#hledger -f examples/10ktxns-1kaccts.journal balance
-#hledger -f examples/10ktxns-1kaccts.journal print
-#hledger -f examples/10ktxns-1kaccts.journal register
-
-hledger -f examples/100ktxns-1kaccts.journal stats
-hledger -f examples/100ktxns-1kaccts.journal balance
-hledger -f examples/100ktxns-1kaccts.journal print
-hledger -f examples/100ktxns-1kaccts.journal register
+# hledger -f ../examples/10ktxns-1kaccts.journal stats
+# hledger -f ../examples/10ktxns-1kaccts.journal balance
+# hledger -f ../examples/10ktxns-1kaccts.journal print
+# hledger -f ../examples/10ktxns-1kaccts.journal register
+hledger -f ../examples/100ktxns-1kaccts.journal stats
+hledger -f ../examples/100ktxns-1kaccts.journal balance
+hledger -f ../examples/100ktxns-1kaccts.journal print
+hledger -f ../examples/100ktxns-1kaccts.journal register
 
