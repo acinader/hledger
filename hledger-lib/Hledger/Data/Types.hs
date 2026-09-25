@@ -691,6 +691,7 @@ data Journal = Journal {
   ,jparseincludefilestack   :: [(FilePath, FilePath)]                 -- ^ (absolute path, canonical path) of included files, most recent first
   ,jparsepos                :: Maybe ParsePos                         -- ^ the most recently calculated source position, if any, from which later ones are calculated cheaply
   ,jparseamountstyles       :: S.Set AmountStyle                     -- ^ the distinct amount styles parsed so far, which parsed amounts share to save memory
+  ,jparsetexts              :: S.Set Text                            -- ^ the distinct account names and commodity symbols parsed so far, which parsed items share to save memory
 -- principal data
   ,jdeclaredpayees          :: [(Payee,PayeeDeclarationInfo)]         -- ^ Payees declared by payee directives, in parse order.
   ,jdeclaredtags            :: [(TagName,TagDeclarationInfo)]         -- ^ Tags declared by tag directives, in parse order.

@@ -237,7 +237,7 @@ journalp :: MonadIO m => InputOpts -> ErroringJournalParser m ParsedJournal
 journalp iopts = do
   many $ addJournalItemP iopts
   eof
-  modify' $ \j -> j{jparsepos = Nothing, jparseamountstyles = mempty}  -- drop parse-time state that is only meaningful during parsing
+  modify' $ \j -> j{jparsepos = Nothing, jparseamountstyles = mempty, jparsetexts = mempty}  -- drop parse-time state that is only meaningful during parsing
   get
 
 -- | A side-effecting parser; parses any kind of journal item
@@ -864,7 +864,7 @@ marketpricedirectivep = do
   mc <- lift peekChar
   mtime <- if maybe False isDigit mc then lift $ optional $ try timeofdayp else pure Nothing
   when (isJust mtime) $ lift skipNonNewlineSpaces1
-  symbol <- lift commoditysymbolp
+  symbol <- shareText =<< lift commoditysymbolp
   lift skipNonNewlineSpaces1
   price <- amountp
   lift restofline
@@ -1039,7 +1039,8 @@ postingphelper isPostingRule mTransactionYear = do
       lift skipNonNewlineSpaces
       account <- modifiedaccountnamep True
       return (status, account)
-    let (preal, account') = (accountNamePostingType account, textUnbracket account)
+    let preal = accountNamePostingType account
+    account' <- shareText $ textUnbracket account
     lift skipNonNewlineSpaces
     mult <- if isPostingRule then multiplierp else pure False
     amt <- optional $ amountp' $ if mult then MultiplierAmount else OrdinaryAmount

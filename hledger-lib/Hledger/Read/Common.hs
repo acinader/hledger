@@ -53,6 +53,7 @@ module Hledger.Read.Common (
   getDefaultCommodityAndStyle,
   getDefaultAmountStyle,
   getAmountStyle,
+  shareText,
   addDeclaredAccountTags,
   addDeclaredAccountType,
   pushParentAccount,
@@ -612,6 +613,19 @@ shareAmountStyle s = do
       modify' $ \j -> j{jparseamountstyles = S.insert s styles}
       return s
 
+-- | Return an identical text parsed earlier (an account name or commodity symbol), if there is one,
+-- so that they share one copy; otherwise remember (a compact copy of) this one and return that.
+-- Journals use relatively few distinct account names and commodity symbols, so this saves memory.
+shareText :: Text -> JournalParser m Text
+shareText t = do
+  texts <- jparsetexts <$> get
+  case S.lookupLE t texts of
+    Just t' | t' == t -> return t'
+    _ -> do
+      let t' = T.copy t  -- don't retain the whole input text this is a slice of
+      modify' $ \j -> j{jparsetexts = S.insert t' texts}
+      return t'
+
 addDeclaredAccountTags :: AccountName -> [Tag] -> JournalParser m ()
 addDeclaredAccountTags acct atags =
   modify' (\j -> j{jdeclaredaccounttags = M.insertWith (flip union) acct atags (jdeclaredaccounttags j)})
@@ -1096,7 +1110,7 @@ simpleamountp kind =
   -- An amount with commodity symbol on the left.
   leftsymbolamountp :: (Decimal -> Decimal) -> JournalParser m Amount
   leftsymbolamountp sign = label "amount" $ do
-    c <- lift commoditysymbolp
+    c <- shareText =<< lift commoditysymbolp
     mdecmarkStyle <- getDecimalMarkStyle
     mcommodityStyle <- getAmountStyle c
     -- XXX amounts of this commodity in periodic transaction rules and auto posting rules ? #1461
@@ -1130,7 +1144,8 @@ simpleamountp kind =
       else pure Nothing
     case mSpaceAndCommodity of
       -- right symbol amount
-      Just (commodityspaced, c) -> do
+      Just (commodityspaced, c0) -> do
+        c <- shareText c0
         mdecmarkStyle <- getDecimalMarkStyle
         mcommodityStyle <- getAmountStyle c
         -- XXX amounts of this commodity in periodic transaction rules and auto posting rules ? #1461
