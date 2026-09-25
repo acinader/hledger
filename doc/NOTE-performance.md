@@ -3,45 +3,43 @@
 Working notes: the ranked list of performance ideas not yet tried, kept between sessions.
 Measurements, lessons learned and how to measure are in [PERFORMANCE](PERFORMANCE.md);
 the September 2026 optimisation commits are listed by `git log --grep='^perf:'`.
-Numbers below are for `hledger balance` on examples/100ktxns-1kaccts.journal (about 2.2s on a
-MacBook Pro M5 Pro in 2026-09).
-A lot-using variant for idea 5 can be generated with tools/_100k-lots-journal.py (local, untracked).
+Numbers below are for `hledger balance` on examples/100ktxns-1kaccts.journal (about 1.7s on a
+MacBook Pro M5 Pro in late 2026-09, with 152 MB max residency).
+A lot-using variant for idea 3 can be generated with tools/_100k-lots-journal.py (local, untracked).
 
-Pending upstream: [megaparsec#612](https://github.com/mrkkrp/megaparsec/issues/612) (filed
-2026-09-23), fixed by [megaparsec#613](https://github.com/mrkkrp/megaparsec/pull/613) (INLINE
-pragmas on the Stream instances, opened 2026-09-25 at the maintainer's invitation). Measured on
-current hledger: about 10% off every command (balance 2.25 -> 2.03s, parse allocation 10.4 -> 7.8 GB).
-Once released, raise hledger's megaparsec lower bound or snapshot.
+Done in 2026-09: the megaparsec regression (fixed upstream in megaparsec 9.8.3, via our
+[megaparsec#613](https://github.com/mrkkrp/megaparsec/pull/613); pinned in all stack configs),
+and the residency reductions (strict parser accumulators, shared amount styles, account names and
+commodity symbols: 2.6 -> 1.5 KB per transaction).
 
-## Remaining ideas, ranked (general ones first)
+## Remaining ideas, ranked
 
 Expected gains are for the 100k balance run; "general" means every command pays it.
 
-1. Megaparsec regression, ~10%, general. Wait for #612, or ship an interim fix: a newtype around
-   the input Text with a direct Stream instance (INLINE pragmas), changing the parser type alias and
-   run sites only; about 100 lines, removable later. Lowest risk of anything here.
-2. Residency reductions, a few percent, general: share one AmountStyle per commodity (return the
-   map's style object when unchanged), intern account names in the parser. Less copying, fewer cache
-   misses, less allocation.
-3. Styling pass, 9%, general, structural: stop storing display styles per amount and resolve them
-   when rendering. Touches everything that shows amounts. Not a quick one.
-4. Small finalise stages, ~1% each: account types (plus the regex fallback on every untyped-account
-   lookup, accountNameInferType), style inference, cost tagging.
-5. Remaining lot overhead on lot journals, ~0.36s: calculateLots still sorts, rebuilds and re-ties
+1. Parser, 60% of the run (1.0s): a hand-written fast path for the common posting, date and number
+   shapes would bypass megaparsec's per-token overhead, with the general parser as fallback.
+   The biggest remaining target, but it means a second parser to keep consistent.
+2. Report side, per command: the balance command is 0.31s (18%), mostly building the account tree
+   (HashMap update and period data insertion per posting), and it computes amount widths more than
+   once. print's own rendering is about 0.9s at 100k, and is shared by exports, hledger-ui and
+   hledger-web: profile it.
+3. Remaining lot overhead on lot journals, ~0.36s: calculateLots still sorts, rebuilds and re-ties
    every transaction (0.135s); basis-from-account-name and transacted-cost inference search every
    account name (0.07s); commodity tags, method coherence.
-6. Report side, per command: balance account tree and width computation (~0.1s); print's own
-   rendering (~0.8s at 100k, shared by exports, hledger-ui and hledger-web): profile it.
-7. Parser, beyond megaparsec's fix: a hand-written fast path for the common posting, date and
-   number shapes would bypass megaparsec's per-token overhead, with the general parser as fallback,
-   but it means a second parser to keep consistent. Not recommended until the megaparsec fix has
-   landed and been measured.
-8. Order of magnitude, not incremental: an on-disk cache of the finalised journal keyed by file
+4. Small finalise stages, ~1-2% each: style inference (0.04s), account types (plus the regex
+   fallback on every untyped-account lookup, accountNameInferType), cost tagging.
+5. Remaining memory: the steady state is mostly postings, amounts and their maps, transactions,
+   and descriptions (slices of the input text, which keep it alive). The compacting collector
+   (`+RTS -c`) could reduce total memory in use towards the live data size; users can now try it,
+   since the executables accept RTS options. Worth measuring before recommending.
+6. Order of magnitude, not incremental: an on-disk cache of the finalised journal keyed by file
    contents and finalising options, skipping most of the run on unchanged journals; big feature
    with invalidation risks (includes, config, -I and friends, CSV/timeclock inputs). Parallel
    parsing of included files would help multi-file setups only.
 
 Not worth retrying: nursery sizes; memory-doubling GC flags (unless the trade-off is reconsidered);
 aggressive specialisation flags; deepseq in postingphelper; a dedicated `--timing` flag (`--debug=1`
-was chosen); deferred styling in reports; tying lot checks to `--lots`/holdings; removing parser
-labels.
+was chosen); tying lot checks to `--lots`/holdings; removing parser labels; applying display styles
+at render time instead of storing them per amount (7% of the run, but every report would need to
+get it right); re-pointing postings during posting transforms, and releasing the balancer's input
+journal early (both addressed short-lived peaks only).

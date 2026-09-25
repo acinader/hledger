@@ -27,14 +27,15 @@ txns/s is the throughput reported by `hledger stats`.
 
 | command    |  1.25 |  1.40 |  1.52 | 1.99.4 |  main |  since 1.25 |  since 1.52 | since 1.99.4 |
 |------------|------:|------:|------:|-------:|------:|------------:|------------:|-------------:|
-| stats      |  2.70 |  3.95 |  4.29 |   5.96 |  2.00 |  35% (1.4x) | 114% (2.1x) |  198% (3.0x) |
-| balance    |  2.68 |  3.92 |  4.06 |   5.80 |  2.15 |  25% (1.2x) |  89% (1.9x) |  170% (2.7x) |
-| print      |  3.24 |  4.27 |  4.42 |   6.32 |  2.84 |  14% (1.1x) |  56% (1.6x) |  123% (2.2x) |
-| register   | 71.99 | 30.22 | 20.73 |  19.02 | 14.17 | 408% (5.1x) |  46% (1.5x) |   34% (1.3x) |
-| **txns/s** |   37k |   25k | 23k * |  17k * |   52k |  41% (1.4x) | 126% (2.3x) |  206% (3.1x) |
+| stats      |  2.70 |  3.95 |  4.29 |   5.96 |  1.60 |  69% (1.7x) | 168% (2.7x) |  273% (3.7x) |
+| balance    |  2.68 |  3.92 |  4.06 |   5.80 |  1.70 |  58% (1.6x) | 139% (2.4x) |  241% (3.4x) |
+| print      |  3.24 |  4.27 |  4.42 |   6.32 |  2.29 |  41% (1.4x) |  93% (1.9x) |  176% (2.8x) |
+| register   | 71.99 | 30.22 | 20.73 |  19.02 | 14.31 | 403% (5.0x) |  45% (1.4x) |   33% (1.3x) |
+| **txns/s** |   37k |   25k | 23k * |  17k * |   66k |  78% (1.8x) | 187% (2.9x) |  288% (3.9x) |
 
 1.52 is the current hledger 1 release, and 1.99.4 the latest hledger 2 preview.
-So hledger main is about 3x faster than 1.99.4, 2x faster than 1.52, and 1.2x faster than 1.25, the previous speed king.
+So hledger main is about 3x faster than 1.99.4, 2-2.5x faster than 1.52, and 1.5x faster than 1.25, the previous speed king.
+It also needs about half the memory: `balance` on this journal peaks at about 150 MB of live data (about 425 MB in use by the runtime), where 1.52 needs 284 MB (808 MB).
 
 \* hledger 1.51 to 1.99.4 measured `stats`' elapsed time before computing the statistics and writing
 the report, so the txns/s they show is too high: about 10% on a 1k-transaction journal, 13% at 10k
@@ -51,7 +52,12 @@ trying optional syntax, instead of trying parsers and backtracking;
 inferring commodity styles in one pass;
 avoiding needless work in the transaction balancer;
 multiplying decimal numbers directly;
-and not rebuilding the journal for empty queries.
+not rebuilding the journal for empty queries;
+using megaparsec 9.8.3, which fixes a slowdown in megaparsec 9.3 to 9.8.2
+([megaparsec#612](https://github.com/mrkkrp/megaparsec/issues/612));
+and using less memory, which also means less garbage collection: the parser no longer leaves
+unevaluated work piling up as it builds the journal, and parsed amounts share their display styles,
+account names and commodity symbols instead of each having its own copy.
 The commits are listed by `git log --grep='^perf:'`.
 
 When a release is made, update this table (and the "main" wording above).
@@ -59,21 +65,21 @@ When a release is made, update this table (and the "main" wording above).
 ## Where the time goes
 
 A snapshot from September 2026: `hledger balance -f examples/100ktxns-1kaccts.journal --debug=1`,
-about 2.3s in total (2.2s in a normal run):
+about 1.8s in total (1.7s in a normal run):
 
 | phase                                        | time  | allocation | notes                                                           |
 |----------------------------------------------|-------|------------|-----------------------------------------------------------------|
-| startup + read                               | 0.05s | 70 MB      |                                                                 |
-| parse                                        | 1.28s | 10.5 GB    | more than half the run                                          |
-| journalReverse                               | 0.09s | 12 MB      | a GC pause landing here; the stage itself is trivial            |
-| journalAddAccountTypes                       | 0.04s | 161 MB     |                                                                 |
-| journalStyleAmounts                          | 0.22s | 197 MB     | rebuilds every posting to set display styles                    |
-| journalTagCostsAndEquityAndMaybeInferCosts   | 0.02s | 136 MB     | skipped per transaction unless conversion accounts are involved |
+| startup + read                               | 0.06s | 68 MB      |                                                                 |
+| parse                                        | 1.02s | 7.9 GB     | more than half the run                                          |
+| journalReverse                               | 0.01s | 12 MB      |                                                                 |
+| journalAddAccountTypes                       | 0.02s | 87 MB      |                                                                 |
+| journalStyleAmounts                          | 0.12s | 218 MB     | rebuilds every posting to set display styles                    |
+| journalTagCostsAndEquityAndMaybeInferCosts   | 0.02s | 137 MB     | skipped per transaction unless conversion accounts are involved |
 | journalBalanceTransactionsAndDeferAssertions | 0.10s | 415 MB     | the second pass is skipped (no assertions or assignments)       |
-| journalInferCommodityStyles                  | 0.05s | 61 MB      |                                                                 |
-| journalInferMarketPricesFromTransactions     | 0.06s | 348 MB     | only charged under the timer; only valuation uses these         |
-| balance command                              | 0.37s | 1.1 GB     | building the account tree, rendering                            |
-| garbage collection, spread over all of these | 0.69s |            | 12.6 GB allocated, 262 MB max residency, about 0.8 GB RSS       |
+| journalInferCommodityStyles                  | 0.04s | 61 MB      |                                                                 |
+| journalInferMarketPricesFromTransactions     | 0.07s | 348 MB     | only charged under the timer; only valuation uses these         |
+| balance command                              | 0.31s | 1.0 GB     | building the account tree, rendering                            |
+| garbage collection, spread over all of these | 0.45s |            | 10.0 GB allocated, 152 MB max residency, 426 MB in use          |
 
 Register is much slower on this journal (15s) because it renders a running balance in 26
 commodities for 200k lines; real journals have few commodities.
@@ -156,6 +162,17 @@ so `stack bench hledger` does nothing; to use it, enable it there.
 - To measure one kind of journal line, split the journal by line kind; eg a copy without price
   directives (`grep -v '^P '`) and one with only them showed the price directives costing a quarter
   of the parse time.
+- To see what memory is made of, make a heap census with source locations: build with
+  `--ghc-options='-finfo-table-map -fdistinct-constructor-tables'` in a scratch work dir, run with
+  `+RTS -hi -l -RTS`, and map the census's addresses to source locations with
+  `ghc-events show hledger.eventlog` (its "Info Table" lines). A profiling build's census (`-hc`, `-hd`)
+  is less accurate here: profiling disables optimisations, so it shows unevaluated closures which
+  normal builds don't have.
+- Judge memory by `+RTS -s`'s maximum residency and bytes copied, not by a census's highest sample.
+  A census forces a major collection at every sample, so it catches short-lived peaks which the ten
+  or so major collections of a normal run never see; its plateaus are more representative.
+- Don't combine a census with `--debug=1`, whose phase timing fully evaluates each stage and so
+  changes what is in memory.
 - `hledger +RTS -s -RTS` shows the runtime system's memory and GC statistics.
   hledger accepts other runtime flags too, so GC settings (`-A`, `-F`, `-xn`, `-c`) and memory
   limits (`-M`) can be tried directly, and `+RTS -hT -RTS` makes a basic heap profile without a
@@ -178,11 +195,17 @@ so `stack bench hledger` does nothing; to use it, enable it there.
 - Most of what remains in the parser is megaparsec's own machinery.
   Megaparsec 9.3.0 and later made hledger's parser about 15% slower and 33% more allocating
   (the plain Text Stream instance now delegates through a newtype),
-  reported as [megaparsec#612](https://github.com/mrkkrp/megaparsec/issues/612).
-  Rebuilt with megaparsec 9.2.2, `hledger balance` was about 10% faster (measured before the parser
-  changes above).
+  reported as [megaparsec#612](https://github.com/mrkkrp/megaparsec/issues/612) and fixed in
+  megaparsec 9.8.3 by INLINE pragmas on those instances, which made all commands about 10% faster.
+  hledger's stack configs use 9.8.3; its package bounds still allow older versions, which work
+  correctly, only more slowly.
 - Postings are built strictly while parsing, which lowers peak memory; fully forcing them with
   deepseq was slower, because it evaluates tags and comments that most reports never read.
+- The parser accumulates the journal in its state, and each update must be strict, down to the list
+  being added to: `j{jtxns = t : jtxns j}` left an unevaluated list update per transaction, which
+  piled up through the whole parse. Making these strict cut garbage collection copying by a quarter.
+  Likewise, strict fields only evaluate to the outermost constructor: a `!(Maybe Char)` field
+  can still hold an unevaluated Char, keeping parser data alive.
 
 ### Finalising
 
@@ -204,9 +227,15 @@ so `stack bench hledger` does nothing; to use it, enable it there.
 
 - Garbage collection time is mostly the copying of the live journal, not collection overhead:
   nursery sizes from 4 MB (the default) to 128 MB made no difference except to memory use.
-- The in-memory journal takes about 2.6 KB per transaction. Reducing that is the remaining GC lever:
-  each amount carries its own copy of its display style, and account name texts are not shared
-  between postings.
+- The in-memory journal now takes about 1.5 KB per transaction (152 MB for the 100k journal),
+  down from 2.6 KB. Most of the saving came from sharing: journals use few distinct amount styles,
+  account names and commodity symbols, so the parser keeps the ones it has seen
+  (`jparseamountstyles`, `jparsetexts`) and gives identical ones the same object, and the styling
+  pass does the same for amounts whose precision differs from their commodity's.
+  Less live data means less garbage collection: this made reading about 10% faster overall.
+- Tried without effect: re-pointing postings to their transformed transaction during posting
+  transforms, and stopping the balancer from holding on to its input journal. Both addressed
+  short-lived peaks, not the steady state.
 - Some runtime flags trade memory for time: `-xn` (the non-moving collector) saved 10% of the run
   time but raised peak memory from 0.8 to 1.3 GB; `-xn -F3` saved 13% for 24% more; `-F4` 6% for 32%
   more. Not adopted as defaults.
