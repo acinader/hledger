@@ -157,6 +157,8 @@ executables:
   hledger-web:
     source-dirs: app
     main: main.hs
+    # -rtsopts lets users set GHC runtime options, eg +RTS -M2G -RTS to limit memory
+    ghc-options: -rtsopts
     when:
     - condition: flag(library-only)
       buildable: false

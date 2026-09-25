@@ -7832,6 +7832,9 @@ non-ascii characters, ANSI text formatting, and/or the add command's TAB key, ma
 (For best results, try a powershell window.)
 
 When processing large data files, hledger uses more memory than Ledger.
+You can cap its memory use with GHC runtime system options, eg `hledger +RTS -M2G -RTS ...`
+(if it needs more, it will stop with an error),
+and see memory and garbage collection statistics with `+RTS -s -RTS`.
 
 ## Troubleshooting
 

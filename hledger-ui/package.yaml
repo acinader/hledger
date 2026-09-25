@@ -111,7 +111,8 @@ executables:
     source-dirs: app
     main: hledger-ui.hs
     # -threaded is needed for runPager, at least
-    ghc-options: -threaded
+    # -rtsopts lets users set GHC runtime options, eg +RTS -M2G -RTS to limit memory
+    ghc-options: -threaded -rtsopts
     dependencies:
     - hledger-ui
 

@@ -157,9 +157,9 @@ so `stack bench hledger` does nothing; to use it, enable it there.
   directives (`grep -v '^P '`) and one with only them showed the price directives costing a quarter
   of the parse time.
 - `hledger +RTS -s -RTS` shows the runtime system's memory and GC statistics.
-  Other runtime flags (`-A`, `-F`, `-xn`, heap profiling) are refused by the shipped binary;
-  to experiment with them, build in a scratch work dir with `-rtsopts`, eg
-  `stack --work-dir .stack-rtsopts build --ghc-options=-rtsopts hledger`.
+  hledger accepts other runtime flags too, so GC settings (`-A`, `-F`, `-xn`, `-c`) and memory
+  limits (`-M`) can be tried directly, and `+RTS -hT -RTS` makes a basic heap profile without a
+  profiling build.
 
 ## What we have learned
 

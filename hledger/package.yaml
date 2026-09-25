@@ -231,7 +231,8 @@ executables:
     main: hledger-cli.hs
     # -threaded is needed for runPager, at least
     # -T is for the stats command
-    ghc-options: -threaded -with-rtsopts=-T
+    # -rtsopts lets users set GHC runtime options, eg +RTS -M2G -RTS to limit memory, or -s to show GC stats
+    ghc-options: -threaded -rtsopts -with-rtsopts=-T
     dependencies:
     - hledger
 
