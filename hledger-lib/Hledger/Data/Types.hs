@@ -46,6 +46,7 @@ import Data.List (intercalate, sortBy)
 --You will eventually need all the values stored.
 --The stored values don't represent large virtual data structures to be lazily computed.
 import Data.Map qualified as M
+import Data.Set qualified as S
 import Data.Ord (comparing)
 import Data.Semigroup (Min(..))
 import Data.Text (Text)
@@ -689,6 +690,7 @@ data Journal = Journal {
   ,jparsetimeclockentries   :: [TimeclockEntry]                       -- ^ timeclock sessions which have not been clocked out
   ,jparseincludefilestack   :: [(FilePath, FilePath)]                 -- ^ (absolute path, canonical path) of included files, most recent first
   ,jparsepos                :: Maybe ParsePos                         -- ^ the most recently calculated source position, if any, from which later ones are calculated cheaply
+  ,jparseamountstyles       :: S.Set AmountStyle                     -- ^ the distinct amount styles parsed so far, which parsed amounts share to save memory
 -- principal data
   ,jdeclaredpayees          :: [(Payee,PayeeDeclarationInfo)]         -- ^ Payees declared by payee directives, in parse order.
   ,jdeclaredtags            :: [(TagName,TagDeclarationInfo)]         -- ^ Tags declared by tag directives, in parse order.

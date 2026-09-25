@@ -151,6 +151,7 @@ import Data.List (find, genericReplicate, union)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, listToMaybe)
 import Data.Map qualified as M
+import Data.Set qualified as S
 import Data.Semigroup qualified as Sem
 import Data.Text (Text, stripEnd)
 import Data.Text qualified as T
@@ -599,6 +600,17 @@ getAmountStyle commodity = do
   let mspecificStyle = M.lookup commodity jdeclaredcommodities >>= cformat
   mdefaultStyle <- fmap snd <$> getDefaultCommodityAndStyle
   return $ listToMaybe $ catMaybes [mspecificStyle, mdefaultStyle]
+
+-- | Return an identical amount style parsed earlier, if there is one, so that amounts share it;
+-- otherwise remember and return this one. Journals use few distinct styles, so this saves memory.
+shareAmountStyle :: AmountStyle -> JournalParser m AmountStyle
+shareAmountStyle s = do
+  styles <- jparseamountstyles <$> get
+  case S.lookupLE s styles of
+    Just s' | s' == s -> return s'
+    _ -> do
+      modify' $ \j -> j{jparseamountstyles = S.insert s styles}
+      return s
 
 addDeclaredAccountTags :: AccountName -> [Tag] -> JournalParser m ()
 addDeclaredAccountTags acct atags =
@@ -1097,7 +1109,7 @@ simpleamountp kind =
     offAfterNum <- getOffset
     let numRegion = (offBeforeNum, offAfterNum)
     (q,prec,mdec,mgrps) <- interpretNumber numRegion suggestedStyle ambiguousRawNum mExponent
-    let s = amountstyle{ascommodityside=L, ascommodityspaced=commodityspaced, asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps}
+    s <- shareAmountStyle amountstyle{ascommodityside=L, ascommodityspaced=commodityspaced, asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps}
     return nullamt{acommodity=c, aquantity=sign (sign2 q), astyle=s, acost=Nothing}
 
   -- An amount with commodity symbol on the right or no commodity symbol.
@@ -1124,7 +1136,7 @@ simpleamountp kind =
         -- XXX amounts of this commodity in periodic transaction rules and auto posting rules ? #1461
         let msuggestedStyle = mdecmarkStyle <|> mcommodityStyle
         (q,prec,mdec,mgrps) <- interpretNumber numRegion msuggestedStyle ambiguousRawNum mExponent
-        let s = amountstyle{ascommodityside=R, ascommodityspaced=commodityspaced, asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps}
+        s <- shareAmountStyle amountstyle{ascommodityside=R, ascommodityspaced=commodityspaced, asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps}
         return nullamt{acommodity=c, aquantity=sign q, astyle=s, acost=Nothing}
       -- no symbol amount
       Nothing -> do
@@ -1142,7 +1154,8 @@ simpleamountp kind =
         let (c,s) = case defcs of
               Just (defc,defs) | kind /= MultiplierAmount -> (defc, defs{asprecision=max (asprecision defs) prec})
               _ -> ("", amountstyle{asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps})
-        return nullamt{acommodity=c, aquantity=sign q, astyle=s, acost=Nothing}
+        s' <- shareAmountStyle s
+        return nullamt{acommodity=c, aquantity=sign q, astyle=s', acost=Nothing}
 
   -- For reducing code duplication. Doesn't parse anything. Has the type
   -- of a parser only in order to read the parse state and throw parse errors (for convenience).

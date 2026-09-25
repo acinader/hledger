@@ -702,8 +702,8 @@ getAmounts a@Amount{acost} = a : case acost of
 amountStyleApplyWithRounding :: Bool -> Quantity -> AmountStyle -> AmountStyle -> AmountStyle
 amountStyleApplyWithRounding iscost q news@AmountStyle{asprecision=newp, asrounding=newr} AmountStyle{asprecision=oldp} =
   case newr of
-    NoRounding   -> news{asprecision=oldp}
-    SoftRounding -> news{asprecision=if iscost then oldp else newp'}
+    NoRounding   -> withprec oldp
+    SoftRounding -> withprec $ if iscost then oldp else newp'
       where
         newp' = case (newp, oldp) of
           (Precision new, Precision old) ->
@@ -712,8 +712,11 @@ amountStyleApplyWithRounding iscost q news@AmountStyle{asprecision=newp, asround
             else Precision $ max (min old internal) new
               where internal = decimalPlaces $ normalizeDecimal q
           _ -> NaturalPrecision
-    HardRounding -> news{asprecision=if iscost then oldp else newp}
+    HardRounding -> withprec $ if iscost then oldp else newp
     AllRounding  -> news
+  where
+    -- reuse the new style itself when the precision is unchanged, so that amounts share it (saves memory)
+    withprec p = if p == newp then news else news{asprecision=p}
 
 -- | Set this amount style's rounding strategy when it is being applied to amounts.
 amountStyleSetRounding :: Rounding -> AmountStyle -> AmountStyle

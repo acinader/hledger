@@ -237,7 +237,7 @@ journalp :: MonadIO m => InputOpts -> ErroringJournalParser m ParsedJournal
 journalp iopts = do
   many $ addJournalItemP iopts
   eof
-  modify' $ \j -> j{jparsepos = Nothing}  -- drop the position anchor, it is only meaningful during parsing
+  modify' $ \j -> j{jparsepos = Nothing, jparseamountstyles = mempty}  -- drop parse-time state that is only meaningful during parsing
   get
 
 -- | A side-effecting parser; parses any kind of journal item
