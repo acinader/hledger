@@ -1,7 +1,7 @@
 # Stack config for profiling builds. Use it with its own work dir, so normal builds aren't disturbed:
 #   stack --stack-yaml stack-prof.yaml --work-dir .stack-prof install --library-profiling --executable-profiling --local-bin-path bin hledger
 #   mv bin/hledger bin/hledgerprof
-#   bin/hledgerprof CMD +RTS -p    # writes hledgerprof.prof; see doc/BENCHMARKS.md
+#   bin/hledgerprof CMD +RTS -p    # writes hledgerprof.prof; see doc/PERFORMANCE.md
 # GHC 9.14.1 panics compiling tls-2.4.3 with profiling, so tls is built unoptimised;
 # cost centres (-fprof-auto) are added only to hledger-lib and hledger.
 # Keep resolver/compiler in sync with stack.yaml.

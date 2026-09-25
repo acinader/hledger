@@ -110,7 +110,7 @@ Times the end-user commands in `bench/bench.sh` using quickbench:
 
     just bench
 
-See [BENCHMARKS](BENCHMARKS.md) for this and the other ways to measure performance.
+See [PERFORMANCE](PERFORMANCE.md) for this and the other ways to measure performance.
 
 ## Run functional tests
 

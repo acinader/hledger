@@ -22,7 +22,7 @@ and then symlinked into the hledger_site repo for rendering on hledger.org.
 - [FILES](FILES.md) - repo and working copy layout
 - [TESTS](TESTS.md) - test suites and how to run them
 - [ERRORS](ERRORS.md) - error message standards and examples
-- [BENCHMARKS](BENCHMARKS.md) - performance measurement
+- [PERFORMANCE](PERFORMANCE.md) - performance across releases, how to measure it, lessons learned
 
 **Specs**
 
