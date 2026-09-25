@@ -55,7 +55,7 @@ statementPage here tabtitle spec = do
   let filtered = if q /= Any then ", filtered" else "" :: Text
       rspecOrig = reportspec_ $ cliopts_ opts
       roptsOrig = _rsReportOpts rspecOrig
-      menu = [(r, l, t) | (r, l, t, _) <- reportMenu]
+      menu = reportLinkItems reportMenu
 
   defaultLayout $ do
     setTitle $ H.toHtml tabtitle

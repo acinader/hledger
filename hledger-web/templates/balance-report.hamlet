@@ -4,6 +4,13 @@
        title="Show general journal entries, most recent first">
       Journal
   <td .top>
+$# A report's label spans both columns: it is longer than an account name,
+$# and nothing goes beside it.
+$forall (route, label, title) <- reports
+  <tr :here == route:.inacct>
+    <td .top .acct colspan=2>
+      <a href=@?{(route, reportParams)} :here == route:.inacct title=#{title}>
+        #{label}
 $forall (acct, adisplay, aindent, abal) <- items
   <tr
      :matchesAcctSelector acct:.inacct
