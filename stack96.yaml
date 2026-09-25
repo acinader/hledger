@@ -9,6 +9,8 @@ packages:
 - hledger-web
 
 extra-deps:
+# megaparsec 9.8.3 parses about 10% faster than earlier versions (megaparsec#612)
+- megaparsec-9.8.3
 # for the rewrite command's --diff (Data.Algorithm.DiffContext):
 - Diff-1.0.2
 - encoding-0.10
