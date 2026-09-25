@@ -160,6 +160,7 @@ import Data.List (find, intercalate, minimumBy, nub, partition, sort, sortBy, un
 import Data.List (foldl')
 #endif
 import Data.List.Extra (nubSort)
+import Data.Array qualified as A
 import Data.Map.Strict qualified as M
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, listToMaybe, mapMaybe, maybeToList)
 import Data.Ord (comparing)
@@ -1270,11 +1271,33 @@ journalModifyTransactions verbosetags d j =
 -- commands which list prices, like prices and print, style them when rendering.
 -- This can return an error message eg if inconsistent number formats are found.
 journalStyleAmounts :: Journal -> Either String Journal
-journalStyleAmounts = fmap journalapplystyles . journalInferCommodityStyles
+journalStyleAmounts = fmap applystyles . journalInferCommodityStyles
   where
-    journalapplystyles j = journalMapPostings (styleAmounts styles) j
-      where
-        styles = journalCommodityStylesWith NoRounding j  -- defer rounding, in case of print --round=none
+    applystyles j = journalMapPostings (postingShareStyles styles . styleAmounts styles) j
+      where styles = journalCommodityStylesWith NoRounding j  -- defer rounding, in case of print --round=none
+
+-- | A memory optimisation, used after applying commodity styles to a posting's amounts.
+-- An amount whose display precision differs from its commodity's usual precision
+-- (eg $5 when the usual is $5.25) ends up with its own copy of the commodity's style,
+-- which differs only in precision. This replaces such copies with one shared copy
+-- for each commodity and precision, from a table of each commodity's style at every
+-- possible precision (whose entries are created only when first needed).
+-- On a 100k-transaction journal with mixed precisions this saves about 3% of memory;
+-- it doesn't change the run time noticeably.
+postingShareStyles :: M.Map CommoditySymbol AmountStyle -> Posting -> Posting
+postingShareStyles styles = postingTransformAmount $ \(Mixed m) -> Mixed $ M.map shareAmountStyle m  -- commodities are unchanged, so the map keys are too
+  where
+    sharedstyles = M.map (\s -> A.listArray (0, 255) [s{asprecision=Precision p} | p <- [0..255]]) styles
+
+    shareAmountStyle a = a{astyle = shareStyle (acommodity a) (astyle a), acost = shareCostStyle <$> acost a}
+
+    shareCostStyle (UnitCost a)  = UnitCost  $ shareAmountStyle a
+    shareCostStyle (TotalCost a) = TotalCost $ shareAmountStyle a
+
+    -- If this style is the same as a shared one, use the shared one.
+    shareStyle comm s = case (asprecision s, M.lookup comm sharedstyles) of
+      (Precision p, Just stylesbyprecision) | stylesbyprecision A.! p == s -> stylesbyprecision A.! p
+      _ -> s
 
 -- | Get the canonical amount styles for this journal, whether (in order of precedence):
 -- set globally in InputOpts,
