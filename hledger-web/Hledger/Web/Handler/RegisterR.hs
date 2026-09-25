@@ -22,7 +22,7 @@ import Hledger.Web.WebOptions
 import Hledger.Web.Widget.AddForm (addModal)
 import Hledger.Web.Widget.Common
              (accountQuery, accountOnlyQuery, mixedAmountAsHtml,
-              transactionFragment, removeDates, removeInacct, replaceInacct)
+              transactionFragment, removeDates, removeInacct, replaceInacct, journalDayQuery)
 
 -- | The main journal/account register view, with accounts sidebar.
 getRegisterR :: Handler Html
@@ -137,8 +137,10 @@ decorateLinks = concatMap $ \(acct, (name, comma)) ->
 -- | The register balance chart: its markup, carrying the per-commodity
 -- series as JSON in a data attribute. hledger.js draws it with flot on page
 -- load; see registerChartInit there.
-registerChartHtml :: Text -> [(Text, Text)] -> String -> [(CommoditySymbol, [AccountTransactionsReportItem])] -> HtmlUrl AppRoute
-registerChartHtml q accumParams title percommoditytxnreports = $(hamletFile "templates/chart.hamlet")
+registerChartHtml ::
+  Text -> [(Text, Text)] -> (Transaction -> String) -> String ->
+  [(CommoditySymbol, [AccountTransactionsReportItem])] -> HtmlUrl AppRoute
+registerChartHtml q accumParams transactionFrag title percommoditytxnreports = $(hamletFile "templates/chart.hamlet")
  where
    charttitle = if null title then "" else title ++ ":"
    nodatelink = (RegisterR, [("q", t) | let t = T.unwords $ removeDates q, not (T.null t)] ++ accumParams)
@@ -152,7 +154,7 @@ registerChartHtml q accumParams title percommoditytxnreports = $(hamletFile "tem
                      , toJSON . showZeroCommodity $ triCommodityAmount c i
                      , toJSON . showZeroCommodity $ triCommodityBalance c i
                      , toJSON . T.stripEnd . showTransaction $ triOrigTransaction i
-                     , toJSON . tindex $ triOrigTransaction i
+                     , toJSON . transactionFrag $ triOrigTransaction i
                      ]
                    | i <- reverse items ]
      ]
