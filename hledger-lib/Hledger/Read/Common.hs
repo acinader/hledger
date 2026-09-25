@@ -133,7 +133,6 @@ module Hledger.Read.Common (
 where
 
 --- ** imports
-import Control.Applicative.Permutations (runPermutation, toPermutationWithDefault)
 import Control.Monad (foldM, liftM2, when, unless, (>=>), (<=<))
 import Control.Monad.Fail qualified as Fail (fail)
 import Control.Exception (evaluate)
@@ -1049,21 +1048,23 @@ amountp' kind =
   label "amount" $ do
   let spaces = lift $ skipNonNewlineSpaces
   amt <- simpleamountp kind <* spaces
-  -- A cost, valuation expression or lot annotation may follow, in any order.
-  -- These all begin with one of a few characters; check for one cheaply first,
-  -- since most amounts have none of them.
-  mnext <- lift peekChar
-  (mcost, _valuationexpr, mlotcb, mlotdate, mlotnote) <-
-    if maybe False (`elem` ("@({[" :: String)) mnext
-    then runPermutation $
-      -- costp, valuationexprp, lotnotep all parse things beginning with parenthesis;
-      -- costp backtracks if it's not a cost, so that errors within a cost's amount are reported
-      (,,,,) <$> toPermutationWithDefault Nothing (Just <$> costp amt <* spaces)
-            <*> toPermutationWithDefault Nothing (Just <$> valuationexprp <* spaces)  -- XXX no try needed here ?
-            <*> toPermutationWithDefault Nothing (Just <$> lotcostp (aquantity amt) <* spaces)
-            <*> toPermutationWithDefault Nothing (Just <$> lotdatep <* spaces)
-            <*> toPermutationWithDefault Nothing (Just <$> lotnotep <* spaces)
-    else pure (Nothing, Nothing, Nothing, Nothing, Nothing)
+  -- A cost, valuation expression or lot annotation may follow, in any order, each at most once.
+  -- Each begins with a distinctive character or two, so look at those and run just the right
+  -- parser, stopping at anything else or at a repeated kind. (A permutation parser was used before,
+  -- but its failed attempts at the other alternatives made each cost cost ~3x as much as a posting.)
+  -- costp, valuationexprp and lotnotep all begin with a parenthesis; costp is tried first,
+  -- and backtracks if no @ follows, so that errors within a cost's amount are reported.
+  let annotations mcost mval mcb mdate mnote = do
+        (mc1, mc2) <- lift peekChars2
+        case (mc1, mc2) of
+          (Just '@', _)        | isNothing mcost -> costp amt <* spaces          >>= \x -> annotations (Just x) mval mcb mdate mnote
+          (Just '(', Just '@') | isNothing mcost -> costp amt <* spaces          >>= \x -> annotations (Just x) mval mcb mdate mnote
+          (Just '(', Just '(') | isNothing mval  -> valuationexprp <* spaces     >>= \x -> annotations mcost (Just x) mcb mdate mnote
+          (Just '{', _)        | isNothing mcb   -> lotcostp (aquantity amt) <* spaces >>= \x -> annotations mcost mval (Just x) mdate mnote
+          (Just '[', _)        | isNothing mdate -> lotdatep <* spaces           >>= \x -> annotations mcost mval mcb (Just x) mnote
+          (Just '(', _)        | isNothing mnote -> lotnotep <* spaces           >>= \x -> annotations mcost mval mcb mdate (Just x)
+          _ -> pure (mcost, mval, mcb, mdate, mnote)
+  (mcost, _valuationexpr, mlotcb, mlotdate, mlotnote) <- annotations Nothing Nothing Nothing Nothing Nothing
   -- Reject mixing consolidated {DATE,...} or {"LABEL",...} with ledger-style [DATE] or (NOTE)
   let isConsolidated = case mlotcb of
         Just cb | isJust (cbDate cb) || isJust (cbLabel cb) -> True
