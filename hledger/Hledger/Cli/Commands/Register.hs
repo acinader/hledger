@@ -169,9 +169,9 @@ postingsReportItemAsRecord opts@CliOpts{reportspec_=rspec} fmt baseUrl query (_,
         (dateCell baseUrl query (paccount p) date) {Spr.cellType = Spr.TypeDate}
     code = maybe "" tcode $ ptransaction p
     desc = maybe "" tdescription $ ptransaction p
-    acct = bracket . dropAcct . clipAcct $ paccount p
+    -- (account names have already been clipped to the depth limit by postingsReport)
+    acct = bracket . dropAcct $ paccount p
       where
-        clipAcct = clipOrEllipsifyAccountName (depth_ $ _rsReportOpts rspec)
         dropAcct = accountNameDrop (fromMaybe 0 $ readMay =<< maybestringopt "drop" (rawopts_ opts))
         bracket = case preal p of
                              BalancedVirtualPosting -> wrap "[" "]"
@@ -270,9 +270,9 @@ postingsReportItemAsText opts@CliOpts{reportspec_=rspec} preferredamtwidth prefe
 
     -- gather content
     desc = fromMaybe "" mdesc
-    acct = parenthesise . elideAccountName awidth . dropAcct . clipAcct $ paccount p
+    -- (account names have already been clipped to the depth limit by postingsReport)
+    acct = parenthesise . elideAccountName awidth . dropAcct $ paccount p
       where
-        clipAcct = clipOrEllipsifyAccountName (depth_ $ _rsReportOpts rspec)
         dropAcct = accountNameDrop (fromMaybe 0 $ readMay =<< maybestringopt "drop" (rawopts_ opts))
         (parenthesise, awidth) = case preal p of
             BalancedVirtualPosting -> (wrap "[" "]", acctwidth-2)
