@@ -410,13 +410,13 @@ mainfile :: Journal -> (FilePath, Text)
 mainfile = headDef ("(unknown)", "") . jfiles
 
 addTransaction :: Transaction -> Journal -> Journal
-addTransaction t j = j { jtxns = t : jtxns j }
+addTransaction t j@Journal{jtxns=ts} = let ts' = t : ts in ts' `seq` j { jtxns = ts' }
 
 -- | Add a journal item, evaluated first (its fields are strict) so no parse-time thunks are retained.
 -- Consecutive blank line items are collapsed into one.
 addJournalItem :: JournalItem -> Journal -> Journal
 addJournalItem JIBlank j@Journal{jitems=JIBlank:_} = j
-addJournalItem i j = i `seq` j { jitems = i : jitems j }
+addJournalItem i j@Journal{jitems=is} = let is' = i : is in i `seq` is' `seq` j { jitems = is' }
 
 -- | Add a transaction parsed from a journal file, and a placeholder item for it.
 -- Any comment lines immediately preceding it (the JIComment items on top of jitems)
@@ -440,7 +440,7 @@ addPeriodicTransaction :: PeriodicTransaction -> Journal -> Journal
 addPeriodicTransaction pt j = j { jperiodictxns = pt : jperiodictxns j }
 
 addPriceDirective :: PriceDirective -> Journal -> Journal
-addPriceDirective h j = j { jpricedirectives = h : jpricedirectives j }  -- XXX #999 keep sorted
+addPriceDirective h j@Journal{jpricedirectives=hs} = let hs' = h : hs in hs' `seq` j { jpricedirectives = hs' }  -- XXX #999 keep sorted
 
 -- | Get the transaction with this index (its 1-based position in the input stream), if any.
 journalTransactionAt :: Journal -> Integer -> Maybe Transaction

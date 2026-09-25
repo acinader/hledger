@@ -1446,8 +1446,14 @@ fromRawNumber (WithSeparators{}) (Just _) =
     Left "invalid number: digit separators and exponents may not be used together"
 fromRawNumber raw mExp = do
     (quantity, precision) <- toQuantity (fromMaybe 0 mExp) (digitGroup raw) (decimalGroup raw)
-    return (quantity, precision, mDecPt raw, digitGroupStyle raw)
+    -- force the Maybes' contents, so that parsed amount styles don't retain the raw number
+    let !mdec = forceMaybe $ mDecPt raw
+        !mgrps = forceMaybe $ digitGroupStyle raw
+    return (quantity, precision, mdec, mgrps)
   where
+    forceMaybe m = case m of
+      Just x  -> x `seq` m
+      Nothing -> m
     toQuantity :: Integer -> DigitGrp -> DigitGrp -> Either String (Quantity, Word8)
     toQuantity e preDecimalGrp postDecimalGrp
       | precision < 0   = Right (Decimal 0 (digitGrpNum * 10^(-precision)), 0)
