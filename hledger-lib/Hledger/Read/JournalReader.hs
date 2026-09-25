@@ -677,7 +677,7 @@ commoditydirectiveonelinep = do
     pos <- getSourcePos'
     lift skipNonNewlineSpaces1
     off <- getOffset
-    amt <- amountp
+    amt <- amountp' StyleAmount
     pure $ (off, pos, amt)
   lift skipNonNewlineSpaces
   (comment, tags) <- lift transactioncommentp
@@ -726,7 +726,7 @@ formatdirectivep expectedsym = do
   string "format"
   lift skipNonNewlineSpaces1
   off <- getOffset
-  Amount{acommodity,astyle} <- amountp
+  Amount{acommodity,astyle} <- amountp' StyleAmount
   _ <- lift followingcommentp
   if acommodity==expectedsym
     then
@@ -847,7 +847,7 @@ defaultcommoditydirectivep = do
   char 'D' <?> "default commodity"
   lift skipNonNewlineSpaces1
   off <- getOffset
-  Amount{acommodity,astyle} <- amountp
+  Amount{acommodity,astyle} <- amountp' StyleAmount
   lift restofline
   if isNothing $ asdecimalmark astyle
   then customFailure $ parseErrorAt off pleaseincludedecimalpoint
@@ -1042,7 +1042,7 @@ postingphelper isPostingRule mTransactionYear = do
     let (preal, account') = (accountNamePostingType account, textUnbracket account)
     lift skipNonNewlineSpaces
     mult <- if isPostingRule then multiplierp else pure False
-    amt <- optional $ amountp' mult
+    amt <- optional $ amountp' $ if mult then MultiplierAmount else OrdinaryAmount
     lift skipNonNewlineSpaces
     mc <- lift peekChar
     massertion <- if mc == Just '=' then optional balanceassertionp else pure Nothing

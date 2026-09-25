@@ -2209,6 +2209,10 @@ You can use a `decimal-mark` directive to declare unambiguously which
 character (period or comma) represents a [decimal mark](#decimal-marks),
 for all subsequent amounts until the end of the current file.
 This helps when parsing ambiguous numbers (like `1.000` or `1,000` where you mean one thousand, not one).
+It also makes hledger check that numbers use that decimal mark and no other,
+which catches some typos and misparsed numbers.
+With `decimal-mark ,`, a number like `1,000.00` is reported as an error;
+and with `decimal-mark .`, a number like `1.2.34` is reported as an error, instead of being read as `1234`.
 
 Eg, at the top of each journal file:
 
@@ -2223,6 +2227,12 @@ decimal-mark ,
 This directive only affects parsing, and it takes precedence over `commodity` directives.
 So you can declare preferred decimal marks for display,
 which may be different from the decimal mark(s) used in the data files.
+(The amounts in `commodity` and `D` directives are allowed to use a different decimal mark.)
+
+Without a `decimal-mark` directive, a `commodity` directive's decimal mark is used
+to interpret that commodity's ambiguous numbers, but it is not enforced:
+numbers like `1.2.34` or `1.000,00` (when the format is `1,000.00`) are accepted.
+So if you want these checks, use `decimal-mark`.
 
 ## `include` directive
 
@@ -3216,6 +3226,9 @@ hledger automatically accepts either period or comma as a decimal mark when pars
 (cf [Amounts](#amounts)).
 However if any numbers in the CSV contain digit group marks, such as thousand-separating commas,
 you should declare the decimal mark explicitly with this rule, to avoid misparsed numbers.
+Like the [`decimal-mark` directive](#decimal-mark-directive), this also makes hledger report
+numbers using a different decimal mark, or repeating the declared one (like `1.2.34`), as errors.
+This applies to amounts from the CSV fields and to amounts written in the rules.
 
 ## CSV fields vs hledger fields
 

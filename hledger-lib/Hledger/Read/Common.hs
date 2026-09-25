@@ -86,6 +86,7 @@ module Hledger.Read.Common (
   -- ** amounts
   spaceandamountormissingp,
   amountp,
+  AmountParseKind(..),
   amountp',
   commoditysymbolp,
   costp,
@@ -976,11 +977,12 @@ spaceandamountormissingp =
 -- To parse an amount's numeric quantity we need to know which character 
 -- represents a decimal mark. We find it in one of three ways:
 --
--- 1. If a decimal mark has been set explicitly in the journal parse state, 
---    we use that
+-- 1. If a decimal mark has been set explicitly in the journal parse state
+--    (by a decimal-mark directive or CSV rule), we use that, strictly
 --
 -- 2. Or if the journal has a commodity declaration for the amount's commodity,
---    we get the decimal mark from  that
+--    we get the decimal mark from that, and use it only to interpret ambiguous numbers
+--    (see AmountParseKind for details)
 --
 -- 3. Otherwise we will parse any valid decimal mark appearing in the
 --    number, as long as the number appears well formed.
@@ -989,17 +991,38 @@ spaceandamountormissingp =
 --    which is a bit too loose. There's an open issue.)
 --
 amountp :: JournalParser m Amount
-amountp = amountp' False
+amountp = amountp' OrdinaryAmount
+
+-- | The kinds of amount which are parsed a little differently.
+--
+-- A decimal-mark directive (or CSV rule) declares how numbers are written in the data,
+-- and data amounts (OrdinaryAmount, MultiplierAmount) must obey it strictly;
+-- violations are parse errors, reported at the number.
+-- A commodity or D directive declares a display style, given as a sample amount (StyleAmount),
+-- which may use a different decimal mark from the data.
+-- When there's no decimal-mark directive, a commodity's display style is also used
+-- to interpret ambiguous numbers like 1,000, but it is not enforced.
+data AmountParseKind
+  = OrdinaryAmount
+    -- ^ An amount in the data: in a posting, cost, balance assertion, price directive, CSV record, etc.
+    --   If a decimal-mark directive is in effect, the number must use only that decimal mark:
+    --   1,000.00 is rejected when , is declared, and 1.2.34 when . is declared.
+  | MultiplierAmount
+    -- ^ A multiplier in an auto posting rule (*AMT). The default commodity is not applied to it.
+    --   Otherwise it's parsed like an OrdinaryAmount.
+  | StyleAmount
+    -- ^ The sample amount in a commodity directive (or its format subdirective) or a D directive,
+    --   declaring a display style. Its decimal mark may differ from the one declared by decimal-mark,
+    --   so that is not enforced; but it is still used to interpret ambiguous numbers like 1,000.
+  deriving (Eq, Show)
 
 -- An amount with optional cost, valuation, and/or cost basis, as described above.
--- A flag indicates whether we are parsing a multiplier amount;
--- if not, a commodity-less amount will have the default commodity applied to it.
-amountp' :: Bool -> JournalParser m Amount
-amountp' mult =
+amountp' :: AmountParseKind -> JournalParser m Amount
+amountp' kind =
   -- dbg "amountp'" $
   label "amount" $ do
   let spaces = lift $ skipNonNewlineSpaces
-  amt <- simpleamountp mult <* spaces
+  amt <- simpleamountp kind <* spaces
   -- A cost, valuation expression or lot annotation may follow, in any order.
   -- These all begin with one of a few characters; check for one cheaply first,
   -- since most amounts have none of them.
@@ -1007,8 +1030,9 @@ amountp' mult =
   (mcost, _valuationexpr, mlotcb, mlotdate, mlotnote) <-
     if maybe False (`elem` ("@({[" :: String)) mnext
     then runPermutation $
-      -- costp, valuationexprp, lotnotep all parse things beginning with parenthesis, try needed
-      (,,,,) <$> toPermutationWithDefault Nothing (Just <$> try (costp amt) <* spaces)
+      -- costp, valuationexprp, lotnotep all parse things beginning with parenthesis;
+      -- costp backtracks if it's not a cost, so that errors within a cost's amount are reported
+      (,,,,) <$> toPermutationWithDefault Nothing (Just <$> costp amt <* spaces)
             <*> toPermutationWithDefault Nothing (Just <$> valuationexprp <* spaces)  -- XXX no try needed here ?
             <*> toPermutationWithDefault Nothing (Just <$> lotcostp (aquantity amt) <* spaces)
             <*> toPermutationWithDefault Nothing (Just <$> lotdatep <* spaces)
@@ -1036,16 +1060,15 @@ amountnobasisp =
   -- dbg "amountnobasisp" $ 
   label "amount" $ do
   let spaces = lift $ skipNonNewlineSpaces
-  amt <- simpleamountp False
+  amt <- simpleamountp OrdinaryAmount
   spaces
   mprice <- optional $ costp amt <* spaces
   pure $ amt { acost = mprice }
 
 -- An amount with no cost or cost basis.
--- A flag indicates whether we are parsing a multiplier amount;
--- if not, a commodity-less amount will have the default commodity applied to it.
-simpleamountp :: Bool -> JournalParser m Amount
-simpleamountp mult = 
+-- A commodity-less amount will have the default commodity applied to it, unless it's a multiplier.
+simpleamountp :: AmountParseKind -> JournalParser m Amount
+simpleamountp kind =
   -- dbg "simpleamountp" $
   do
   sign <- lift signp
@@ -1073,7 +1096,7 @@ simpleamountp mult =
     mExponent <- lift optionalexponentp
     offAfterNum <- getOffset
     let numRegion = (offBeforeNum, offAfterNum)
-    (q,prec,mdec,mgrps) <- lift $ interpretNumber numRegion suggestedStyle ambiguousRawNum mExponent
+    (q,prec,mdec,mgrps) <- interpretNumber numRegion suggestedStyle ambiguousRawNum mExponent
     let s = amountstyle{ascommodityside=L, ascommodityspaced=commodityspaced, asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps}
     return nullamt{acommodity=c, aquantity=sign (sign2 q), astyle=s, acost=Nothing}
 
@@ -1100,7 +1123,7 @@ simpleamountp mult =
         mcommodityStyle <- getAmountStyle c
         -- XXX amounts of this commodity in periodic transaction rules and auto posting rules ? #1461
         let msuggestedStyle = mdecmarkStyle <|> mcommodityStyle
-        (q,prec,mdec,mgrps) <- lift $ interpretNumber numRegion msuggestedStyle ambiguousRawNum mExponent
+        (q,prec,mdec,mgrps) <- interpretNumber numRegion msuggestedStyle ambiguousRawNum mExponent
         let s = amountstyle{ascommodityside=R, ascommodityspaced=commodityspaced, asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps}
         return nullamt{acommodity=c, aquantity=sign q, astyle=s, acost=Nothing}
       -- no symbol amount
@@ -1112,29 +1135,31 @@ simpleamountp mult =
         mdefaultStyle   <- getDefaultAmountStyle -- a D default commodity directive
         -- XXX no-symbol amounts in periodic transaction rules and auto posting rules ? #1461
         let msuggestedStyle = mdecmarkStyle <|> mcommodityStyle <|> mdefaultStyle
-        (q,prec,mdec,mgrps) <- lift $ interpretNumber numRegion msuggestedStyle ambiguousRawNum mExponent
+        (q,prec,mdec,mgrps) <- interpretNumber numRegion msuggestedStyle ambiguousRawNum mExponent
         -- if a default commodity has been set, apply it and its style to this amount
         -- (unless it's a multiplier in an automated posting)
         defcs <- getDefaultCommodityAndStyle
-        let (c,s) = case (mult, defcs) of
-              (False, Just (defc,defs)) -> (defc, defs{asprecision=max (asprecision defs) prec})
+        let (c,s) = case defcs of
+              Just (defc,defs) | kind /= MultiplierAmount -> (defc, defs{asprecision=max (asprecision defs) prec})
               _ -> ("", amountstyle{asprecision=prec, asdecimalmark=mdec, asdigitgroups=mgrps})
         return nullamt{acommodity=c, aquantity=sign q, astyle=s, acost=Nothing}
 
   -- For reducing code duplication. Doesn't parse anything. Has the type
-  -- of a parser only in order to throw parse errors (for convenience).
+  -- of a parser only in order to read the parse state and throw parse errors (for convenience).
   interpretNumber
     :: (Int, Int) -- offsets
     -> Maybe AmountStyle
     -> Either AmbiguousNumber RawNumber
     -> Maybe Integer
-    -> TextParser m (Quantity, AmountPrecision, Maybe Char, Maybe DigitGroupStyle)
-  interpretNumber posRegion msuggestedStyle ambiguousNum mExp =
-    let rawNum = either (disambiguateNumber msuggestedStyle) id ambiguousNum
-    in  case fromRawNumber rawNum mExp of
-          Left errMsg -> customFailure $
-                           uncurry parseErrorAtRegion posRegion errMsg
-          Right (q,p,d,g) -> pure (q, Precision p, d, g)
+    -> JournalParser m (Quantity, AmountPrecision, Maybe Char, Maybe DigitGroupStyle)
+  interpretNumber posRegion msuggestedStyle ambiguousNum mExp = do
+    -- The decimal mark declared by a decimal-mark directive or CSV rule, which all numbers must use,
+    -- except those declaring a display style.
+    mrequiredmark <- if kind == StyleAmount then pure Nothing else jparsedecimalmark <$> get
+    case interpretRawNumber mrequiredmark msuggestedStyle ambiguousNum mExp of
+      Left errMsg -> customFailure $
+                       uncurry parseErrorAtRegion posRegion errMsg
+      Right (q,p,d,g) -> pure (q, Precision p, d, g)
 
 -- | Try to parse a single-commodity amount from a string
 parseamount :: String -> Either HledgerParseErrors Amount
@@ -1188,15 +1213,15 @@ costp baseAmt =
   label "transaction price" $ do
   -- https://www.ledger-cli.org/3.0/doc/ledger3.html#Virtual-posting-costs
   -- (optional parts are checked for cheaply before parsing, as usual)
+  -- ( might begin something else, like a valuation expression or lot note, so backtrack if no @ follows
   parenthesised <- (== Just '(') <$> lift peekChar
-  when parenthesised $ void $ char '('
-  char '@'
+  if parenthesised then void $ try $ string "(@" else void $ char '@'
   totalCost <- (== Just '@') <$> lift peekChar
   when totalCost $ void $ char '@'
   when parenthesised $ void $ char ')'
 
   lift skipNonNewlineSpaces
-  priceAmount <- simpleamountp False -- <?> "unpriced amount (specifying a price)"
+  priceAmount <- simpleamountp OrdinaryAmount -- <?> "unpriced amount (specifying a price)"
 
   let amtsign' = signum $ aquantity baseAmt
       amtsign  = if amtsign' == 0 then 1 else amtsign'
@@ -1285,14 +1310,14 @@ lotcostp postingqty =
     consolidatedAfterDate d = do
       -- after date: optional ", LABEL", optional ", COST"
       mlabel <- optional $ try $ char ',' >> lift skipNonNewlineSpaces >> quotedLabelp <* lift skipNonNewlineSpaces
-      mcost  <- optional $ char ',' >> lift skipNonNewlineSpaces >> simpleamountp False <* lift skipNonNewlineSpaces
+      mcost  <- optional $ char ',' >> lift skipNonNewlineSpaces >> simpleamountp OrdinaryAmount <* lift skipNonNewlineSpaces
       pure $ CostBasis (Just d) mlabel mcost
 
     consolidatedNoDate = do
       -- parse "LABEL", then optional ", COST"
       mlabel <- Just <$> quotedLabelp
       lift skipNonNewlineSpaces
-      mcost <- optional $ char ',' >> lift skipNonNewlineSpaces >> simpleamountp False <* lift skipNonNewlineSpaces
+      mcost <- optional $ char ',' >> lift skipNonNewlineSpaces >> simpleamountp OrdinaryAmount <* lift skipNonNewlineSpaces
       pure $ CostBasis Nothing mlabel mcost
 
     quotedLabelp = do
@@ -1304,7 +1329,7 @@ lotcostp postingqty =
     ledgerCost = do
       _fixed <- fmap isJust $ optional $ char '='
       lift skipNonNewlineSpaces
-      ma <- optional $ simpleamountp False
+      ma <- optional $ simpleamountp OrdinaryAmount
       lift skipNonNewlineSpaces
       pure $ CostBasis Nothing Nothing ma
 
@@ -1356,11 +1381,11 @@ numberp suggestedStyle = label "number" $ do
     -- interspersed with periods, commas, or both
     -- dbgparse 0 "numberp"
     sign <- signp
-    rawNum <- either (disambiguateNumber suggestedStyle) id <$> rawnumberp
+    ambiguousNum <- rawnumberp
     mExp <- optionalexponentp
     dbg7 "numberp suggestedStyle" suggestedStyle `seq` return ()
     case dbg7 "numberp quantity,precision,mdecimalpoint,mgrps"
-           $ fromRawNumber rawNum mExp of
+           $ interpretRawNumber Nothing suggestedStyle ambiguousNum mExp of
       Left errMsg -> Fail.fail errMsg
       Right (q, p, d, g) -> pure (sign q, p, d, g)
 
@@ -1373,6 +1398,37 @@ optionalexponentp :: TextParser m (Maybe Integer)
 optionalexponentp = do
   mc <- peekChar
   if mc == Just 'e' || mc == Just 'E' then optional (try exponentp) else pure Nothing
+
+-- | Interpret a possibly-ambiguous raw number as a decimal number.
+-- The suggested style (from a decimal-mark or commodity directive, eg), if any,
+-- is used to disambiguate it.
+-- If a required decimal mark is given (from a decimal-mark directive, eg),
+-- the number must use only that decimal mark.
+interpretRawNumber
+  :: Maybe Char
+  -> Maybe AmountStyle
+  -> Either AmbiguousNumber RawNumber
+  -> Maybe Integer
+  -> Either String (Quantity, Word8, Maybe Char, Maybe DigitGroupStyle)
+interpretRawNumber mrequiredmark msuggestedStyle ambiguousNum mExp = do
+  raw <- checkDecimalMark $ either (disambiguateNumber msuggestedStyle) id ambiguousNum
+  fromRawNumber raw mExp
+  where
+    checkDecimalMark raw = case mrequiredmark of
+      Just d
+        | Just m <- rawDecimalMark raw, m /= d ->
+          declared d $ "but this number's decimal mark is " ++ show m
+        -- rawnumberp decides that a mark appearing more than once is a digit group mark.
+        -- If that's the declared decimal mark, the number is probably mistyped (eg 1.2.34);
+        -- don't silently read it as a larger number.
+        | Just d == rawDigitGroupMark raw ->
+          declared d "so it can appear only once"
+      _ -> Right raw
+    declared d msg = Left $ "invalid number: the decimal mark is declared to be " ++ show d ++ ", " ++ msg
+    rawDecimalMark (NoSeparators _ mdec)     = fst <$> mdec
+    rawDecimalMark (WithSeparators _ _ mdec) = fst <$> mdec
+    rawDigitGroupMark (WithSeparators sep _ _) = Just sep
+    rawDigitGroupMark NoSeparators{}           = Nothing
 
 -- | Interpret a raw number as a decimal number.
 --
@@ -2041,6 +2097,27 @@ tests_Common = testGroup "Common" [
      assertParseError p ",1." ""
      assertParseEq    p "1.555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555" (1.555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555, 255, Just '.', Nothing)
      assertParseError p "1.5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555" ""
+
+  ,testCase "numberp with a suggested decimal mark" $ do
+     let p c = lift (numberp $ Just amountstyle{asdecimalmark=Just c}) :: JournalParser IO (Quantity, Word8, Maybe Char, Maybe DigitGroupStyle)
+     assertParseEq    (p '.') "1.000"        (1, 3, Just '.', Nothing)
+     assertParseEq    (p ',') "1.000"        (1000, 0, Nothing, Just $ DigitGroups '.' [3])
+     assertParseEq    (p ',') "1.000.000"    (1000000, 0, Nothing, Just $ DigitGroups '.' [3,3])
+     assertParseEq    (p '.') "1,000,000"    (1000000, 0, Nothing, Just $ DigitGroups ',' [3,3])
+     assertParseEq    (p '.') "1 000 000"    (1000000, 0, Nothing, Just $ DigitGroups ' ' [3,3])
+     -- the suggested decimal mark is used only for disambiguation, not enforced
+     assertParseEq    (p '.') "1.2.34"       (1234, 0, Nothing, Just $ DigitGroups '.' [2,1,1])
+     assertParseEq    (p ',') "1,000,000.00" (1000000, 2, Just '.', Just $ DigitGroups ',' [3,3])
+
+  ,testCase "amountp with a decimal-mark directive" $ do
+     let p kind = modify' (\j -> j{jparsedecimalmark=Just ','}) >> amountp' kind
+     assertParse      (p OrdinaryAmount) "1.000,5 EUR"
+     assertParseError (p OrdinaryAmount) "1,000.5 EUR"       "number's decimal mark is '.'"
+     assertParseError (p OrdinaryAmount) ".5 EUR"            "number's decimal mark is '.'"
+     assertParseError (p OrdinaryAmount) "1 X @ 1,000.5 EUR" "number's decimal mark is '.'"
+     assertParseError (p OrdinaryAmount) "1,000,000 EUR"     "so it can appear only once"
+     -- directives declaring a display style may use a different decimal mark
+     assertParse      (p StyleAmount)    "1,000.5 EUR"
 
   ,testGroup "spaceandamountormissingp" [
      testCase "space and amount" $ assertParseEq spaceandamountormissingp " $47.18" (mixedAmount $ usd 47.18)
