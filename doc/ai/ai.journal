@@ -113,3 +113,6 @@ account ai
 
 2026-09-25 sm | debugging
     (ai)                                         9 kt
+
+2026-09-25 sm | megaparsec PR #613, speedup measurement
+    (ai)                                         25 kt
