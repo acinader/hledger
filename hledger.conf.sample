@@ -105,3 +105,7 @@
 #     -- echo bchecking: -- forecast bchecking #-e 2months
 #     -- echo pchecking: -- forecast pchecking #-e 2months
 #     -- echo ichecking: -- forecast ichecking #-e 2months
+
+# # hledger watch CMD - show a report that updates when files change
+# watch = ! hledger files | watchexec -F- -c -- hledger    
+
