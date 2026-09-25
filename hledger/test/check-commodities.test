@@ -46,3 +46,16 @@ commodity USD1.00
 
 $ hledger -f- check commodities
 
+
+# ** 7. An error on a price directive quotes its amount as written, not restyled.
+<
+commodity 1 000,00 EUR
+
+2024-01-01
+    a    1 000,00 EUR
+    b
+
+P 2024-01-02 X 1000,5EUR
+$ hledger -f- check commodities
+>2 /P 2024-01-02 X 1000,5EUR/
+>=1

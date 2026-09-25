@@ -1250,19 +1250,20 @@ journalModifyTransactions verbosetags d j =
     Right ts -> Right j{jtxns=ts}
     Left err -> Left err
 
--- | Apply this journal's commodity display styles to all of its amounts.
+-- | Apply this journal's commodity display styles to all of its posting amounts.
 -- This does no display rounding, keeping decimal digits as they were;
 -- it is suitable for an early cleanup pass before calculations.
 -- Reports may want to do additional rounding/styling at render time.
+-- Price directives' amounts are left as written (though they still influence the inferred styles),
+-- so that error messages and `get`'s rewritten price files show them that way;
+-- commands which list prices, like prices and print, style them when rendering.
 -- This can return an error message eg if inconsistent number formats are found.
 journalStyleAmounts :: Journal -> Either String Journal
 journalStyleAmounts = fmap journalapplystyles . journalInferCommodityStyles
   where
-    journalapplystyles j@Journal{jpricedirectives=pds} =
-      journalMapPostings (styleAmounts styles) j{jpricedirectives=map fixpricedirective pds}
+    journalapplystyles j = journalMapPostings (styleAmounts styles) j
       where
         styles = journalCommodityStylesWith NoRounding j  -- defer rounding, in case of print --round=none
-        fixpricedirective pd@PriceDirective{pdamount=a} = pd{pdamount=styleAmounts styles a}
 
 -- | Get the canonical amount styles for this journal, whether (in order of precedence):
 -- set globally in InputOpts,

@@ -45,6 +45,7 @@ If prices files already exist, the newly fetched prices will be merged as follow
 - New prices for dates already seen are discarded. (So if you want to replace old prices, you must delete them before running `get`.)
 - If no new prices remain to be added, the prices file is left as-is.
 - Otherwise, the old prices plus the new prices are saved to the file, ordered by: date, from commodity, to commodity.
+  Each price keeps the number format it was written with.
 
 ### get's helper scripts
 
