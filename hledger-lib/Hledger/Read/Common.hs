@@ -53,7 +53,10 @@ module Hledger.Read.Common (
   getDefaultCommodityAndStyle,
   getDefaultAmountStyle,
   getAmountStyle,
+  journalDecimalMarkStyle,
+  journalAmountStyleFor,
   shareText,
+  shareAmountStyle,
   addDeclaredAccountTags,
   addDeclaredAccountType,
   pushParentAccount,
@@ -96,6 +99,11 @@ module Hledger.Read.Common (
   numberp,
   fromRawNumber,
   rawnumberp,
+  interpretRawNumber,
+  RawNumber(..),
+  AmbiguousNumber(..),
+  DigitGrp(..),
+  isDigitSeparatorChar,
   parseamount,
   parseamount',
   parsemixedamount,
@@ -574,10 +582,11 @@ dp = const $ return ()  -- no-op
 -- (eg by the CSV decimal-mark rule, or possibly a future journal directive).
 -- Return it as an AmountStyle that amount parsers can use.
 getDecimalMarkStyle :: JournalParser m (Maybe AmountStyle)
-getDecimalMarkStyle = do
-  Journal{jparsedecimalmark} <- get
-  let mdecmarkStyle = (\c -> Just $ amountstyle{asdecimalmark=Just c}) =<< jparsedecimalmark
-  return mdecmarkStyle
+getDecimalMarkStyle = journalDecimalMarkStyle <$> get
+
+-- | The amount style implied by a decimal-mark directive or CSV rule in effect, if any.
+journalDecimalMarkStyle :: Journal -> Maybe AmountStyle
+journalDecimalMarkStyle Journal{jparsedecimalmark} = (\c -> amountstyle{asdecimalmark=Just c}) <$> jparsedecimalmark
 
 setDefaultCommodityAndStyle :: (CommoditySymbol,AmountStyle) -> JournalParser m ()
 setDefaultCommodityAndStyle cs = modify' (\j -> j{jparsedefaultcommodity=Just cs})
@@ -595,11 +604,13 @@ getDefaultAmountStyle = fmap snd <$> getDefaultCommodityAndStyle
 -- | Get the 'AmountStyle' declared by the most recently parsed (in the current or parent files,
 -- prior to the current position) commodity directive for the given commodity, if any.
 getAmountStyle :: CommoditySymbol -> JournalParser m (Maybe AmountStyle)
-getAmountStyle commodity = do
-  Journal{jdeclaredcommodities} <- get
-  let mspecificStyle = M.lookup commodity jdeclaredcommodities >>= cformat
-  mdefaultStyle <- fmap snd <$> getDefaultCommodityAndStyle
-  return $ listToMaybe $ catMaybes [mspecificStyle, mdefaultStyle]
+getAmountStyle commodity = flip journalAmountStyleFor commodity <$> get
+
+-- | The 'AmountStyle' declared by the most recently parsed commodity directive for the given
+-- commodity, or failing that by the most recent default commodity directive, if any.
+journalAmountStyleFor :: Journal -> CommoditySymbol -> Maybe AmountStyle
+journalAmountStyleFor Journal{jdeclaredcommodities, jparsedefaultcommodity} commodity =
+  listToMaybe $ catMaybes [M.lookup commodity jdeclaredcommodities >>= cformat, snd <$> jparsedefaultcommodity]
 
 -- | Return an identical amount style parsed earlier, if there is one, so that amounts share it;
 -- otherwise remember and return this one. Journals use few distinct styles, so this saves memory.

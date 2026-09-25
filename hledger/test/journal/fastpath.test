@@ -1,0 +1,211 @@
+# * The journal parser's fast path for simple transactions and price directives
+# (fasttransactionp, fastmarketpricedirectivep in JournalReader.hs).
+# HLEDGER_FASTPATH=check makes hledger parse every fast-path item with the general parser too,
+# and fail if the results differ; so these tests verify that the two parsers agree.
+
+# ** 1. Simple transactions and prices (which the fast path parses) mixed with less simple ones (which it declines); each fast-path result is checked against the general parser.
+<
+; Simple transactions and prices, which the fast path handles, mixed with ones it declines.
+2024-01-01 simple
+    assets:cash                 $-1.50
+    expenses:food
+
+2024/01/02 * cleared, other separators, right symbols and signs
+    assets:cash                 -2 EUR
+    (virtual)                   2,5 EUR
+    [balanced virtual:sub]      -2,5 EUR
+    [balanced virtual:other]    2,5 EUR
+    expenses:other  2 EUR
+
+2024.01.03 ! pending, unit cost, tab in an account name
+    assets:stock                10 AAPL @ $1.5
+    assets:cash                 $-15
+    expenses:fees:a	b       1
+    income:fees                 -1
+
+2024-01-04 total cost, symbol-less amounts
+    a   -1 @@ 0.5 X
+    c   0.5 X
+    (d)  1
+
+2024-01-05 (code) declined: has a code
+    a  1
+    b
+
+2024-01-06 declined: comment ; and tags
+    a  1  ; tag: value
+    b
+
+2024-01-07 declined: balance assertion, digit groups, quoted symbol
+    asserted  1,000.50 = 1,000.50
+    b  1 "two words"
+    c
+
+2024-01-08=2024-01-09 declined: secondary date
+    a  1
+    b
+
+P 2024-01-01 AAPL $1.5
+P 2024-01-02 EUR 1,1 USD  ; comment ignored
+P 2024-01-03 12:00 EUR 1.2 USD
+P 2024-01-04 "two words" 1 X
+$ HLEDGER_FASTPATH=check hledger -f- print
+; Simple transactions and prices, which the fast path handles, mixed with ones it declines.
+2024-01-01 simple
+    assets:cash                                  $-1.50
+    expenses:food
+
+2024-01-02 * cleared, other separators, right symbols and signs
+    assets:cash                                   -2 EUR
+    (virtual)                                      2,5 EUR
+    [balanced virtual:sub]                        -2,5 EUR
+    [balanced virtual:other]                       2,5 EUR
+    expenses:other                                 2 EUR
+
+2024-01-03 ! pending, unit cost, tab in an account name
+    assets:stock                                  10 AAPL @ $1.5
+    assets:cash                                 $-15
+    expenses:fees:a b                              1
+    income:fees                                   -1
+
+2024-01-04 total cost, symbol-less amounts
+    a                                             -1 @@ 0.5 X
+    c                                              0.5 X
+    (d)                                            1
+
+2024-01-05 (code) declined: has a code
+    a                                              1
+    b
+
+2024-01-06 declined: comment  ; and tags
+    a                                              1  ; tag: value
+    b
+
+2024-01-07 declined: balance assertion, digit groups, quoted symbol
+    asserted                                   1,000.50          = 1,000.50
+    b                                              1 "two words"
+    c
+
+2024-01-08=2024-01-09 declined: secondary date
+    a                                              1
+    b
+
+>=
+
+# ** 2. Declared commodity styles resolve ambiguous numbers the same way in both parsers.
+<
+; A declared style resolves ambiguous numbers, in both parsers.
+commodity 1.000,00 EUR
+commodity $1,000.00
+
+2024-01-01
+    a    1,000 EUR
+    b    1.000 EUR
+    c    $1,000
+    d    $1.000
+    e
+$ HLEDGER_FASTPATH=check hledger -f- print
+2024-01-01
+    a                                              1,000 EUR
+    b                                          1.000, EUR
+    c                                         $1,000.
+    d                                             $1.000
+    e
+
+>=
+
+# ** 3. Parent accounts and aliases are applied; a default commodity directive makes symbol-less amounts decline.
+<
+; Parent accounts and aliases are applied; a default commodity makes symbol-less amounts decline.
+alias checking = assets:bank:checking
+apply account home
+
+2024-01-01
+    checking    1
+    expenses:food
+
+end apply account
+
+D 1.000,00 EUR
+
+2024-01-02
+    a    1,5
+    b
+$ HLEDGER_FASTPATH=check hledger -f- print
+2024-01-01
+    home:checking                                  1
+    home:expenses:food
+
+2024-01-02
+    a                                              1,50 EUR
+    b
+
+>=
+
+# ** 4. Register output, with market prices used for valuation (the fast path's price directives).
+<
+; Simple transactions and prices, which the fast path handles, mixed with ones it declines.
+2024-01-01 simple
+    assets:cash                 $-1.50
+    expenses:food
+
+2024/01/02 * cleared, other separators, right symbols and signs
+    assets:cash                 -2 EUR
+    (virtual)                   2,5 EUR
+    [balanced virtual:sub]      -2,5 EUR
+    [balanced virtual:other]    2,5 EUR
+    expenses:other  2 EUR
+
+2024.01.03 ! pending, unit cost, tab in an account name
+    assets:stock                10 AAPL @ $1.5
+    assets:cash                 $-15
+    expenses:fees:a	b       1
+    income:fees                 -1
+
+2024-01-04 total cost, symbol-less amounts
+    a   -1 @@ 0.5 X
+    c   0.5 X
+    (d)  1
+
+2024-01-05 (code) declined: has a code
+    a  1
+    b
+
+2024-01-06 declined: comment ; and tags
+    a  1  ; tag: value
+    b
+
+2024-01-07 declined: balance assertion, digit groups, quoted symbol
+    asserted  1,000.50 = 1,000.50
+    b  1 "two words"
+    c
+
+2024-01-08=2024-01-09 declined: secondary date
+    a  1
+    b
+
+P 2024-01-01 AAPL $1.5
+P 2024-01-02 EUR 1,1 USD  ; comment ignored
+P 2024-01-03 12:00 EUR 1.2 USD
+P 2024-01-04 "two words" 1 X
+$ HLEDGER_FASTPATH=check hledger -f- register -V -e 2024-01-05
+2024-01-01 simple               assets:cash                 $-1.50        $-1.50
+                                expenses:food                $1.50             0
+2024-01-02 cleared, other se..  assets:cash               -2,4 USD      -2,4 USD
+                                (virtual)                  3,0 USD       0,6 USD
+                                [ba:sub]                  -3,0 USD      -2,4 USD
+                                [ba:other]                 3,0 USD       0,6 USD
+                                expenses:other             2,4 USD       3,0 USD
+2024-01-03 pending, unit cos..  assets:stock                $15.00        $15.00
+                                                                         3,0 USD
+                                assets:cash                $-15.00       3,0 USD
+                                expenses:fees:a b             1.00          1.00
+                                                                         3,0 USD
+                                income:fees                  -1.00       3,0 USD
+2024-01-04 total cost, symbo..  a                            -1.00         -1.00
+                                                                         3,0 USD
+                                c                            0.5 X         -1.00
+                                                                         3,0 USD
+                                                                           0.5 X
+                                (d)                           1.00       3,0 USD
+                                                                           0.5 X
