@@ -42,4 +42,8 @@ aggressive specialisation flags; deepseq in postingphelper; a dedicated `--timin
 was chosen); tying lot checks to `--lots`/holdings; removing parser labels; applying display styles
 at render time instead of storing them per amount (7% of the run, but every report would need to
 get it right); re-pointing postings during posting transforms, and releasing the balancer's input
-journal early (both addressed short-lived peaks only).
+journal early (both addressed short-lived peaks only); moving the finalised journal into a GHC compact
+region (ghc-compact) so the GC stops copying it: `compactWithSharing` is needed (the journal is cyclic,
+and its texts are slices of the input) and takes 1.3s for the 100k journal, three times what the GC
+copying costs, and it comes after the memory peak. It might still suit hledger-web and hledger-ui,
+which keep a journal loaded through many collections.
