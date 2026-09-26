@@ -79,7 +79,6 @@ import Text.DocLayout (realLength)
 
 import Hledger.Data.Types hiding (asubs)
 import Hledger.Utils
-import Data.List (partition)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -112,18 +111,25 @@ expenseAccountRegex    = toRegexCI' "^expenses?(:|$)"
 
 -- | Try to guess an account's type from its name,
 -- matching common English top-level account names.
+-- (The top-level account name is checked first, cheaply, and only the regular
+-- expressions which could then match are tried. Previously all of them were tried
+-- for every account, a noticeable cost with many accounts.)
 accountNameInferType :: AccountName -> Maybe AccountType
 accountNameInferType a
-  | regexMatchText cashAccountRegex            a = Just Cash
-  | regexMatchText assetAccountRegex           a = Just Asset
-  | regexMatchText liabilityAccountRegex       a = Just Liability
-  | regexMatchText conversionAccountRegex      a = Just Conversion
-  | regexMatchText unrealisedGainAccountRegex  a = Just UnrealisedGain
-  | regexMatchText equityAccountRegex          a = Just Equity
-  | regexMatchText gainAccountRegex            a = Just Gain
-  | regexMatchText revenueAccountRegex         a = Just Revenue
-  | regexMatchText expenseAccountRegex         a = Just Expense
-  | otherwise                                    = Nothing
+  | isOneOf ["asset", "assets"] =
+      if regexMatchText cashAccountRegex a then Just Cash else Just Asset
+  | isOneOf ["debt", "debts", "liability", "liabilities"] = Just Liability
+  | isOneOf ["equity"] =
+      if regexMatchText conversionAccountRegex a then Just Conversion
+      else if regexMatchText unrealisedGainAccountRegex a then Just UnrealisedGain
+      else Just Equity
+  | isOneOf ["income", "incomes", "revenue", "revenues"] =
+      if regexMatchText gainAccountRegex a then Just Gain else Just Revenue
+  | isOneOf ["expense", "expenses"] = Just Expense
+  | otherwise = Nothing
+  where
+    toplevel = T.toLower $ T.takeWhile (/= acctsepchar) a
+    isOneOf = elem toplevel
 
 -- | Like accountNameInferType, but exclude the provided types from the guesses.
 -- Used eg to prevent "equity:conversion" being inferred as Conversion when a different
@@ -297,21 +303,22 @@ s `isSubAccountNameOf` p =
 subAccountNamesFrom :: [AccountName] -> AccountName -> [AccountName]
 subAccountNamesFrom accts a = filter (`isSubAccountNameOf` a) accts
 
--- | Convert a list of account names to a tree, efficiently.
+-- | Convert a list of account names to a tree (with a "root" node at the top,
+-- and each node's subaccounts in sorted order), efficiently: any missing parent
+-- accounts are added, then each account's direct subaccounts are looked up in a
+-- map, built in one pass. (Previously, the remaining accounts were filtered at
+-- each node, which was quadratic, and a noticeable cost with many accounts.)
 accountNameTreeFrom :: [AccountName] -> Tree AccountName
-accountNameTreeFrom accts = unfoldTree grow ("root", expandAccountNames accts)
+accountNameTreeFrom accts = unfoldTree grow Nothing
   where
-    -- unfoldTree :: (b -> (a, [b])) -> b -> Tree a
-    -- grow :: (b -> (a, [b]))
-    -- a = AccountName                  - the label at each node of the tree
-    -- b = (AccountName, [AccountName]) - the next node's account, and the accounts remaining to consume under it
-    grow :: ((AccountName, [AccountName]) -> (AccountName, [(AccountName, [AccountName])]))
-    grow (a,[])   = (a,[])
-    grow (a,rest) = (a, [(s, filter (s `isAccountNamePrefixOf`) deepersubs) | s <- asubs])
-      where
-        (asubs, deepersubs) = partition (isChildOf a) rest
-        isChildOf "root" = (1==) . accountNameLevel
-        isChildOf acct   = (`isSubAccountNameOf` acct)
+    -- Nothing is the root node; its children are the top-level accounts.
+    grow Nothing  = ("root", map Just $ M.findWithDefault [] Nothing subsbyparent)
+    grow (Just a) = (a, map Just $ M.findWithDefault [] (Just a) subsbyparent)
+    -- each account's direct subaccounts, in the (sorted) order of the expanded account list
+    subsbyparent :: M.Map (Maybe AccountName) [AccountName]
+    subsbyparent = M.map reverse $ M.fromListWith (++) [(parent a, [a]) | a <- expandAccountNames accts]
+    parent a | accountNameLevel a <= 1 = Nothing
+             | otherwise               = Just $ parentAccountName a
 
 -- | Elide an account name to fit in the specified width.
 -- From the ledger 2.6 news:
