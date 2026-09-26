@@ -193,6 +193,13 @@ $ just bench-throughput-dev      # with the current dev build
 $ just bench-throughput-recent   # with recent installed hledger versions
 ```
 
+The elapsed time behind that figure starts early in `main`, so it includes hledger's own startup
+(about 2.5 ms, mostly option processing; it was about 15 ms with a 60-directory PATH, until the
+scan for add-on commands was made conditional) but not the process launch and exit (about 20 ms
+more). So it understates throughput on small journals: on the 1k-transaction sample journal it
+reports 60k transactions per second where the per-transaction rate is 71k, at 10k 86k against
+88k, and at 100k the difference is negligible. Compare sizes above 10k, or subtract the fixed cost.
+
 ### Performance test
 
 `just perftest` runs [hledger/test/_perf.test](https://github.com/hledgerorg/hledger/blob/main/hledger/test/_perf.test),

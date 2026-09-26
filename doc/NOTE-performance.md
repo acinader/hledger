@@ -17,6 +17,8 @@ price directives, comments and tags (a real 21k-transaction journal went from 40
 entries on the fast path; `--debug=1` reports the share and the reasons for the rest);
 and, prompted by that journal, where finalising was 40% of the run, a one-pass account tree
 builder, cheaper account type inference, and tag propagation that leaves untagged postings alone.
+Also the scan of PATH for add-on commands, 11 ms of every run with a long PATH, now happens only
+when the command is not a builtin one (startup 14 -> 2.5 ms; `hledger --version` 32 -> 23 ms).
 
 ## Remaining ideas, ranked
 

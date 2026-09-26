@@ -191,9 +191,6 @@ main = handleExit $ withGhcDebug' $ do
   dbgTimeResetIO  -- start the clock for --debug's phase timings
   -- give ghc-debug a chance to take control
   when (ghcDebugMode == GDPauseAtStart) $ ghcDebugPause'
-  -- Search PATH for addon commands. Exclude any that match builtin command names.
-  addons <- addonCommandNames
-
   ---------------------------------------------------------------
   dbgio "\n1. Preliminary command line parsing" ()
 
@@ -264,6 +261,17 @@ main = handleExit $ withGhcDebug' $ do
       ShellCommand   _    -> (cmdarg, [])  -- handled separately below
     isaliascmd = effectivecmdarg /= cmdarg || not (null aliasargs)
 
+  -- Search PATH for addon commands, excluding any that match builtin command names.
+  -- With a long PATH this takes several milliseconds, so it is done only when it can matter:
+  -- not when there is no command, nor when the command argument is exactly a builtin command's
+  -- name or alias (identified and parsed the same way with or without addons), unless that
+  -- is run or repl, which run addon commands.
+  let addonsneeded = not nocmdprovided && case findBuiltinCommand effectivecmdarg of
+        Just (m, _) -> any (`elem` ["run","repl"]) (modeNames m)
+        Nothing     -> True
+  addons <- if addonsneeded then addonCommandNames else return []
+
+  let
     -- The argument may be an abbreviated command name, which we need to expand.
 
     -- Run cmdargs on conf + cli args to get the full command name.
