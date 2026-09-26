@@ -762,12 +762,14 @@ journalDeclaredAccountTypes Journal{jdeclaredaccounttypes} =
 journalPostingsAddAccountTags :: Journal -> Journal
 journalPostingsAddAccountTags j
   | M.null (jdeclaredaccounttags j) = j  -- no account tags declared, nothing to add
+  | M.null inheritedtagsbyaccount   = j  -- no posted-to account has any, nothing to add
   | otherwise = journalMapPostings addtags j
   where
-    addtags p = p `postingAddTags` M.findWithDefault (inheritedtags $ paccount p) (paccount p) inheritedtagsbyaccount
-    -- the inherited tags of each posted-to account, calculated once per account
-    inheritedtagsbyaccount = M.fromList [(a, inheritedtags a) | a <- journalAccountNamesUsed j]
-    inheritedtags = journalInheritedAccountTags j
+    -- postings whose account has no tags are left as they are (no new posting is built)
+    addtags p = maybe p (postingAddTags p) $ M.lookup (paccount p) inheritedtagsbyaccount
+    -- the inherited tags of each posted-to account which has some, calculated once per account
+    inheritedtagsbyaccount = M.fromList
+      [(a, ts) | a <- journalAccountNamesUsed j, let ts = journalInheritedAccountTags j a, not $ null ts]
 
 -- | Remove all tags from the journal's postings except those provided by their account.
 -- This is useful for the accounts report.
@@ -916,10 +918,14 @@ journalCheckLotsTagValues j = do
 -- If a tag already exists on the posting, it is not changed (the commodity tag will be ignored).
 journalPostingsAddCommodityTags :: Journal -> Journal
 journalPostingsAddCommodityTags j
-  | M.null (jdeclaredcommoditytags j) = j  -- no commodity tags declared, nothing to add
+  | M.null taggedcommodities = j  -- no commodity tags declared, nothing to add
   | otherwise = journalMapPostings addtags j
   where
-    addtags p = p `postingAddTags` concatMap (journalCommodityTags j) (postingCommodities p)
+    taggedcommodities = M.filter (not . null) $ jdeclaredcommoditytags j
+    -- postings whose commodities have no tags are left as they are (no new posting is built)
+    addtags p = case concatMap (\c -> M.findWithDefault [] c taggedcommodities) (postingCommodities p) of
+      []   -> p
+      tags -> p `postingAddTags` tags
 
 -- | For positive postings with a cost basis, which don't look like lot
 -- transfer destinations, infer transacted cost from cost basis. This runs
