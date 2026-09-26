@@ -155,7 +155,7 @@ import Data.Decimal (DecimalRaw (Decimal), Decimal)
 import Data.Either (rights)
 import Data.Function ((&))
 import Data.Functor ((<&>), ($>), void)
-import Data.List (find, genericReplicate, union)
+import Data.List (find, genericReplicate, intercalate, sortOn, union)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, listToMaybe)
 import Data.Map qualified as M
@@ -362,6 +362,7 @@ initialiseAndParseJournal parser iopts f txt = do
     cf <- liftIO $ canonicalizePath f
     prettyParseErrors (runParserT (evalStateT parser (initJournal cf)) f txt)
       >>= dbgTimeIO 1 ("parse " <> takeFileName f)
+      >>= \j -> j <$ dbgFastPathStats (jparsefastpathstats j)
   where
     y = first3 . toGregorian $ _ioDay iopts
     initJournal cf = nulljournal{jparsedefaultyear = Just y, jparseincludefilestack = [(f, cf)]}
@@ -370,6 +371,24 @@ initialiseAndParseJournal parser iopts f txt = do
                       -> ExceptT String IO a
     prettyParseErrors = withExceptT customErrorBundlePretty . liftEither
                     <=< withExceptT (finalErrorBundlePretty . attachSource f txt)
+
+-- | With --debug, report what share of a parsed file's entries (including its included files')
+-- the journal parser's fast path accepted, and why it declined the others; see the fast path
+-- section of Hledger.Read.JournalReader. Nothing is reported for files with no such entries.
+dbgFastPathStats :: MonadIO m => FastPathStats -> m ()
+dbgFastPathStats FastPathStats{..}
+  | debugLevel < 1 || null shares = return ()
+  | otherwise = dbgMsgIO 1 $ "fast path was used for " ++ intercalate ", " shares ++ declined
+  where
+    shares = [share fpsTxnsFast   fpsTxnsGeneral   "transactions" | fpsTxnsFast   + fpsTxnsGeneral   > 0]
+          ++ [share fpsPricesFast fpsPricesGeneral "prices"       | fpsPricesFast + fpsPricesGeneral > 0]
+    -- eg "51% of 900 transactions" (the percentage rounded)
+    share fast general what = show ((200 * fast + total) `div` (2 * total)) ++ "% of " ++ show total ++ " " ++ what
+      where total = fast + general
+    declined
+      | M.null fpsDeclines = ""
+      | otherwise = "; declined: " ++ intercalate ", "
+          [show n ++ " " ++ T.unpack reason | (reason, n) <- sortOn (negate . snd) $ M.toList fpsDeclines]
 
 {- HLINT ignore journalFinalise "Redundant <&>" -} -- silence this warning, the code is clearer as is
 --  note this activates TH, may slow compilation ? https://github.com/ndmitchell/hlint/blob/master/README.md#customizing-the-hints

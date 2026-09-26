@@ -670,6 +670,24 @@ data ParsePos = ParsePos {
   ,ppInput     :: Text
   } deriving (Eq,Generic,Show)
 
+-- | Counts of the journal entries which the journal parser's fast path (see
+-- Hledger.Read.JournalReader) accepted or declined, and the reasons for declining.
+-- Collected only with --debug, and reported after parsing.
+data FastPathStats = FastPathStats {
+   fpsTxnsFast      :: Int             -- ^ transactions parsed by the fast path
+  ,fpsTxnsGeneral   :: Int             -- ^ transactions it declined, parsed by the general parser
+  ,fpsPricesFast    :: Int             -- ^ price directives parsed by the fast path
+  ,fpsPricesGeneral :: Int             -- ^ price directives it declined
+  ,fpsDeclines      :: M.Map Text Int  -- ^ the number of declines for each reason
+  } deriving (Eq,Generic,Show)
+
+instance Semigroup FastPathStats where
+  FastPathStats a b c d e <> FastPathStats a' b' c' d' e' =
+    FastPathStats (a + a') (b + b') (c + c') (d + d') (M.unionWith (+) e e')
+
+instance Monoid FastPathStats where
+  mempty = FastPathStats 0 0 0 0 M.empty
+
 -- | A journal, containing general ledger transactions; also directives and various other things.
 -- This is hledger's main data model.
 --
@@ -692,6 +710,7 @@ data Journal = Journal {
   ,jparsepos                :: Maybe ParsePos                         -- ^ the most recently calculated source position, if any, from which later ones are calculated cheaply
   ,jparseamountstyles       :: S.Set AmountStyle                     -- ^ the distinct amount styles parsed so far, which parsed amounts share to save memory
   ,jparsetexts              :: S.Set Text                            -- ^ the distinct account names and commodity symbols parsed so far, which parsed items share to save memory
+  ,jparsefastpathstats      :: FastPathStats                         -- ^ how many entries the parser's fast path has accepted or declined so far, and why (with --debug)
 -- principal data
   ,jdeclaredpayees          :: [(Payee,PayeeDeclarationInfo)]         -- ^ Payees declared by payee directives, in parse order.
   ,jdeclaredtags            :: [(TagName,TagDeclarationInfo)]         -- ^ Tags declared by tag directives, in parse order.
@@ -883,6 +902,7 @@ instance NFData CostBasis
 instance NFData DateSpan
 instance NFData DigitGroupStyle
 instance NFData EFDay
+instance NFData FastPathStats
 instance NFData Interval
 instance NFData Journal
 instance NFData JournalItem

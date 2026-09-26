@@ -205,6 +205,10 @@ evaluation of the pipeline, but the totals closely match normal runs. One conseq
 a normal run leaves unevaluated is charged too, eg inferred market prices, which only valuation
 uses, appear as a cost of every command. Garbage collection pauses are charged to whichever
 stage is running. This is the best tool for judging an optimisation.
+After parsing each file, it also reports what share of the transactions and price directives
+the journal parser's fast path handled, and why it declined the others (see Parsing, below),
+which shows what keeps a particular journal off the fast path. (Transactions from CSV,
+timeclock or timedot files are not parsed by it, so they are not counted.)
 
 ### Profiling
 
@@ -284,8 +288,10 @@ so `stack bench hledger` does nothing; to use it, enable it there.
   `HLEDGER_FASTPATH=off` disables it (for comparisons), and `HLEDGER_FASTPATH=check` parses each
   fast-path entry with the general parser too and fails on any difference; the functional test
   suite passes in check mode, and hledger/test/journal/fastpath.test exercises the accepted
-  subset that way. When adding journal syntax, either the fast path's guards must exclude it, or
-  the fast path must handle it identically (and the check mode should be run).
+  subset that way. `--debug=1` reports its hit rate and the reasons for declines, which shows
+  what extending it to more syntax would gain on a given journal. When adding journal syntax,
+  either the fast path's guards must exclude it, or the fast path must handle it identically
+  (and the check mode should be run).
 - Costs and lot annotations after an amount were parsed with a permutation parser; its failed
   attempts at the other alternatives made a cost cost three times as much as a whole posting.
   Dispatching on the next character or two instead was 12% off the parse.

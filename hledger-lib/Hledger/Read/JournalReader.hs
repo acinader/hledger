@@ -1009,9 +1009,11 @@ transactionp = do
 -- a scanner (scanSimpleTransaction, scanSimplePrice) which reads the input Text directly.
 -- If the entry has the common simple form, the scanner extracts its parts and the fast path
 -- builds the same value the general parser would have built; otherwise the scanner "declines",
--- returning Nothing without consuming anything, and the general parser runs as before.
--- On a journal of simple transactions this makes parsing about a third faster, with a third of
--- the allocation (see doc/PERFORMANCE.md).
+-- returning a short reason (as a Left) without consuming anything, and the general parser runs
+-- as before. With --debug, the outcomes are counted and reported after parsing (see
+-- countFastPath), showing how much of a journal takes the fast path and what keeps the rest
+-- off it. On a journal of simple transactions this makes parsing about a third faster, with a
+-- third of the allocation (see doc/PERFORMANCE.md).
 --
 -- The one rule for all of this code: the fast path must produce exactly what the general parser
 -- would, or decline. So each scanner below mirrors one general parser (named in its doc comment),
@@ -1032,24 +1034,26 @@ fastPathMode :: String
 fastPathMode = unsafePerformIO $ fromMaybe "" <$> lookupEnv "HLEDGER_FASTPATH"
 {-# NOINLINE fastPathMode #-}
 
--- | Run a fast-path parser (which returns Nothing when it declines), falling back to the
--- general parser when it declines, or when HLEDGER_FASTPATH says to (see fastPathMode).
+-- | Run a fast-path parser (which returns a decline reason, as a Left, when it declines),
+-- falling back to the general parser when it declines, or when HLEDGER_FASTPATH says to (see
+-- fastPathMode); and count the outcome (see countFastPath).
 -- In check mode, after the fast path accepts an entry, the parser state and journal state are
 -- rewound and the general parser is run on the same input; the two results are compared after
 -- applying the given normalising function (txnUntieKnot for transactions, whose postings refer
 -- back to their transaction: comparing or showing such cyclic values would not terminate).
 -- If they agree, the fast path's end state is restored (so that the journal keeps its result,
 -- and its parse-time sharing sets); otherwise the parse fails with a message showing both.
-withFastPath :: (Eq a, Show a) => (a -> a) -> JournalParser m (Maybe a) -> JournalParser m a -> JournalParser m a
-withFastPath norm fastp generalp = case fastPathMode of
+withFastPath :: (Eq a, Show a) => FastPathKind -> (a -> a) -> JournalParser m (Either Text a) -> JournalParser m a -> JournalParser m a
+withFastPath kind norm fastp generalp = case fastPathMode of
   "off"   -> generalp
   "check" -> do
     st0 <- getParserState
     j0  <- get
-    mx  <- fastp
-    case mx of
-      Nothing -> generalp
-      Just x -> do
+    ex  <- fastp
+    countFastPath kind ex
+    case ex of
+      Left _ -> generalp
+      Right x -> do
         st1 <- getParserState
         j1  <- get
         setParserState st0
@@ -1060,15 +1064,56 @@ withFastPath norm fastp generalp = case fastPathMode of
         setParserState st1
         put j1
         return x
-  _ -> fastp >>= maybe generalp pure
+  -- (Without --debug, the outcome is not counted; keep that path free of the extra bind,
+  -- whose continuation closures would cost about 2% of parsing.)
+  _ | debugLevel > 0 -> do
+        ex <- fastp
+        countFastPath kind ex
+        either (const generalp) pure ex
+    | otherwise -> fastp >>= either (const generalp) pure
+
+-- | The kinds of entry the fast path handles, for counting its outcomes.
+data FastPathKind = FastPathTransaction | FastPathPrice
+
+-- | Count a fast path outcome (Right: the entry was accepted; Left: it was declined, with
+-- the reason) in the journal's fast path statistics, which are reported after parsing
+-- (see Hledger.Read.Common.dbgFastPathStats). Called only with --debug.
+countFastPath :: FastPathKind -> Either Text a -> JournalParser m ()
+countFastPath kind outcome = modify' $ \j -> j{jparsefastpathstats = tally $ jparsefastpathstats j}
+  where
+    tally s = case (kind, outcome) of
+      (FastPathTransaction, Right _) -> s{fpsTxnsFast      = fpsTxnsFast s + 1}
+      (FastPathPrice,       Right _) -> s{fpsPricesFast    = fpsPricesFast s + 1}
+      (FastPathTransaction, Left r)  -> s{fpsTxnsGeneral   = fpsTxnsGeneral s + 1,   fpsDeclines = M.insertWith (+) r 1 $ fpsDeclines s}
+      (FastPathPrice,       Left r)  -> s{fpsPricesGeneral = fpsPricesGeneral s + 1, fpsDeclines = M.insertWith (+) r 1 $ fpsDeclines s}
 
 -- | Parse a transaction, using the fast path when it is a simple one (see fasttransactionp).
 transactionOrFastp :: JournalParser m Transaction
-transactionOrFastp = withFastPath txnUntieKnot fasttransactionp transactionp
+transactionOrFastp = withFastPath FastPathTransaction txnUntieKnot fasttransactionp transactionp
 
 -- | Parse a market price directive, using the fast path when it is a simple one (see fastmarketpricedirectivep).
 marketpriceOrFastp :: JournalParser m PriceDirective
-marketpriceOrFastp = withFastPath id fastmarketpricedirectivep marketpricedirectivep
+marketpriceOrFastp = withFastPath FastPathPrice id fastmarketpricedirectivep marketpricedirectivep
+
+-- | The scanners below run in Either Text: a Left is a decline, carrying a short reason
+-- (the same wording each time, since --debug counts the declines by reason).
+-- This declines with the given reason if the condition holds.
+declineIf :: Bool -> Text -> Either Text ()
+declineIf cond reason = when cond $ Left reason
+{-# INLINE declineIf #-}
+
+-- | Convert a Maybe-returning scanner's result to a decline with the given reason, or a success.
+orDecline :: Text -> Maybe a -> Either Text a
+orDecline reason = maybe (Left reason) Right
+{-# INLINE orDecline #-}
+
+-- | The reason for declining a transaction or posting line which has a comment:
+-- says whether the comment seems to contain a tag (a colon), since supporting plain
+-- comments in the fast path would be easier than supporting tags.
+commentDeclineReason :: Text -> Text -> Text
+commentDeclineReason what line
+  | T.any (== ':') (T.drop 1 $ T.dropWhile (/= ';') line) = what <> " comment with tag"
+  | otherwise = what <> " comment"
 
 -- | The parts of a simple transaction recognised by scanSimpleTransaction: date, status,
 -- description, and each posting's account name (parent account and aliases applied, brackets
@@ -1076,10 +1121,10 @@ marketpriceOrFastp = withFastPath id fastmarketpricedirectivep marketpricedirect
 data SimpleTransaction = SimpleTransaction !Day !Status !Text ![(AccountName, PostingRealness, Maybe Amount)]
 
 -- | A fast path for the commonest kind of transaction: if the input begins with one, parse
--- it, consuming its lines; otherwise consume nothing and return Nothing, so that the general
--- transactionp can be used. This produces exactly what transactionp would, but much more
--- cheaply, by scanning the text directly instead of running megaparsec parsers (which
--- allocate heavily per token). A simple transaction has:
+-- it, consuming its lines; otherwise consume nothing and return the reason for declining, so
+-- that the general transactionp can be used. This produces exactly what transactionp would,
+-- but much more cheaply, by scanning the text directly instead of running megaparsec parsers
+-- (which allocate heavily per token). A simple transaction has:
 --
 -- - a full date (YYYY-MM-DD, or with / or . separators), an optional * or ! status mark, and
 --   a description with no comment, code or secondary date;
@@ -1092,16 +1137,16 @@ data SimpleTransaction = SimpleTransaction !Day !Status !Text ![(AccountName, Po
 --   and when there is no symbol, no default commodity directive in effect;
 -- - no CR characters.
 --
--- Anything else declines (returns Nothing), including anything that would be a parse error,
--- so that the general parser reports it. Numbers are interpreted by the same code as the
--- general parser (interpretRawNumber), so declared commodity styles and decimal marks work.
-fasttransactionp :: JournalParser m (Maybe Transaction)
+-- Anything else declines, including anything that would be a parse error, so that the general
+-- parser reports it. Numbers are interpreted by the same code as the general parser
+-- (interpretRawNumber), so declared commodity styles and decimal marks work.
+fasttransactionp :: JournalParser m (Either Text Transaction)
 fasttransactionp = do
   j <- get
   s <- getInput
   case scanSimpleTransaction j s of
-    Nothing -> return Nothing
-    Just (SimpleTransaction date status desc sps, consumed) -> do
+    Left reason -> return $ Left reason
+    Right (SimpleTransaction date status desc sps, consumed) -> do
       startpos <- getSourcePos'
       -- share the account names, symbols and styles with identical earlier ones, as postingp does
       ps <- mapM internPosting sps
@@ -1111,7 +1156,7 @@ fasttransactionp = do
       endpos <- getSourcePos'
       -- the same value transactionp builds: no secondary date, code, comment or tags;
       -- the index and preceding comment are filled in later, as for any transaction
-      return $ Just $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date Nothing status "" desc "" [] ps
+      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date Nothing status "" desc "" [] ps
   where
     internPosting (acct, ptype, mamt) = do
       acct' <- shareText acct
@@ -1136,19 +1181,19 @@ internSimpleAmount a = do
 -- P, a full date, an unquoted commodity symbol, and a simple amount (as described there),
 -- separated by spaces, then optionally other text, which is ignored (as marketpricedirectivep
 -- does). Declines otherwise, eg if a time of day follows the date.
-fastmarketpricedirectivep :: JournalParser m (Maybe PriceDirective)
+fastmarketpricedirectivep :: JournalParser m (Either Text PriceDirective)
 fastmarketpricedirectivep = do
   j <- get
   s <- getInput
   case scanSimplePrice j s of
-    Nothing -> return Nothing
-    Just (date, sym, amt, consumed) -> do
+    Left reason -> return $ Left reason
+    Right (date, sym, amt, consumed) -> do
       pos <- getSourcePos'
       sym' <- shareText sym
       amt' <- internSimpleAmount amt
       -- consume the scanned text, as in fasttransactionp
       updateParserState $ \st -> st{stateInput = T.drop consumed s, stateOffset = stateOffset st + consumed}
-      return $ Just $ PriceDirective pos date sym' amt'
+      return $ Right $ PriceDirective pos date sym' amt'
 
 -- | Recognise a simple market price directive (see fastmarketpricedirectivep) at the start of
 -- the text, returning its date, commodity symbol and price amount, and the number of characters
@@ -1156,22 +1201,24 @@ fastmarketpricedirectivep = do
 -- date, at least one space, the commodity symbol, at least one space, the amount; and then the
 -- rest of the line is ignored, whatever it is (as restofline does there). Declines if a time of
 -- day follows the date, if the symbol is quoted, or if a cost or lot annotation follows the amount.
-scanSimplePrice :: Journal -> Text -> Maybe (Day, CommoditySymbol, Amount, Int)
+scanSimplePrice :: Journal -> Text -> Either Text (Day, CommoditySymbol, Amount, Int)
 scanSimplePrice j s = do
-  (line, _, n) <- scanSimpleLine s
-  r0 <- T.stripPrefix "P" line
-  (date, r1) <- scanSimpleDate $ T.dropWhile isNonNewlineSpace r0
+  (line, _, n) <- orDecline "CR line ending" $ scanSimpleLine s  -- (the text is not empty: it begins with P)
+  r0 <- orDecline "malformed price directive" $ T.stripPrefix "P" line
+  (date, r1) <- orDecline "date not in simple YYYY-MM-DD form" $ scanSimpleDate $ T.dropWhile isNonNewlineSpace r0
   -- at least one space, then the symbol (a digit here would be a time of day: decline)
-  guard $ maybe False (isNonNewlineSpace . fst) $ T.uncons r1
+  declineIf (not $ maybe False (isNonNewlineSpace . fst) $ T.uncons r1) "malformed price directive"
   let r2 = T.dropWhile isNonNewlineSpace r1
-  (c, _) <- T.uncons r2
-  guard $ not (isDigit c) && c /= '"' && not (isNonsimpleCommodityChar c)
+  (c, _) <- orDecline "malformed price directive" $ T.uncons r2
+  declineIf (isDigit c) "time of day in price directive"
+  declineIf (c == '"') "quoted commodity symbol"
+  declineIf (isNonsimpleCommodityChar c) "malformed price directive"
   let (sym, r3) = T.span (not . isNonsimpleCommodityChar) r2
-  guard $ maybe False (isNonNewlineSpace . fst) $ T.uncons r3
+  declineIf (not $ maybe False (isNonNewlineSpace . fst) $ T.uncons r3) "malformed price directive"
   (amt, r4) <- scanSimpleAmount j $ T.dropWhile isNonNewlineSpace r3
   -- a cost or lot annotation on the price: decline; anything else is ignored
-  guard $ maybe True (\(c', _) -> c' `notElem` ("@({[" :: String)) $ T.uncons $ T.dropWhile isNonNewlineSpace r4
-  Just (date, sym, amt, n)
+  declineIf (maybe False (\(c', _) -> c' `elem` ("@({[" :: String)) $ T.uncons $ T.dropWhile isNonNewlineSpace r4) "annotation on the price amount"
+  Right (date, sym, amt, n)
 
 -- | Recognise a simple transaction (see fasttransactionp) at the start of the text, returning
 -- its parts and the number of characters consumed (through the newline of its last line).
@@ -1180,16 +1227,17 @@ scanSimplePrice j s = do
 -- postingsp does, each following indented line is taken as a posting, until a line that is
 -- not indented, or the end of the text. Since a decline must consume nothing, one posting the
 -- scanner does not handle declines the whole transaction.
-scanSimpleTransaction :: Journal -> Text -> Maybe (SimpleTransaction, Int)
+scanSimpleTransaction :: Journal -> Text -> Either Text (SimpleTransaction, Int)
 scanSimpleTransaction j s0 = do
-  (line1, s1, n1) <- scanSimpleLine s0
-  (date, r1) <- scanSimpleDate line1
+  (line1, s1, n1) <- orDecline "CR line ending" $ scanSimpleLine s0  -- (the text is not empty: it begins with a digit)
+  (date, r1) <- orDecline "date not in simple YYYY-MM-DD form" $ scanSimpleDate line1
   -- the date must be followed by whitespace or the end of the line, as transactionp requires
   -- (= would begin a secondary date; anything else is an error)
   r2 <- case T.uncons r1 of
-    Nothing -> Just r1
-    Just (c, _) | isNonNewlineSpace c -> Just $ T.dropWhile isNonNewlineSpace r1
-    _ -> Nothing
+    Nothing -> Right r1
+    Just (c, _) | isNonNewlineSpace c -> Right $ T.dropWhile isNonNewlineSpace r1
+                | c == '='            -> Left "secondary date"
+    _ -> Left "unexpected text after the date"
   let (status, r3) = case T.uncons r2 of
         Just ('*', r) -> (Cleared, r)
         Just ('!', r) -> (Pending, r)
@@ -1197,17 +1245,24 @@ scanSimpleTransaction j s0 = do
       r4 = T.dropWhile isNonNewlineSpace r3
   -- a transaction code (which codep would parse), or a comment (which transactioncommentp would,
   -- possibly with tags): decline
-  guard $ not $ T.isPrefixOf "(" r4 || T.any (== ';') r4
+  declineIf (T.isPrefixOf "(" r4) "transaction code"
+  declineIf (T.any (== ';') r4) $ commentDeclineReason "transaction" r4
   (sps, n) <- scanPostings s1 n1 []
-  Just (SimpleTransaction date status (T.strip r4) sps, n)
+  Right (SimpleTransaction date status (T.strip r4) sps, n)
   where
     parent  = concatAccountNames $ reverse $ jparseparentaccounts j
     als     = jparsealiases j
     scanPostings s n acc = case scanSimpleLine s of
-      Just (line, s', k) | isIndented line -> do
-        p <- scanSimplePosting j parent als line
-        scanPostings s' (n + k) (p : acc)
-      _ -> Just (reverse acc, n)
+      Just (line, s', k)
+        | isIndented line -> do
+            p <- scanSimplePosting j parent als line
+            scanPostings s' (n + k) (p : acc)
+        | otherwise -> Right (reverse acc, n)
+      -- the end of the text, or a line with a CR: in an indented (posting) line that declines,
+      -- since the general parser would accept the posting; any other line just ends the postings
+      Nothing
+        | isIndented (T.takeWhile (/= '\n') s) -> Left "CR line ending"
+        | otherwise -> Right (reverse acc, n)
     -- does the line begin with whitespace followed by something ? (like postingsp's nextlineisindented)
     isIndented line = case T.uncons line of
       Just (c, _) -> isNonNewlineSpace c && not (T.null $ T.dropWhile isNonNewlineSpace line)
@@ -1251,23 +1306,27 @@ scanSimpleDate t = do
 -- removed, as postingp does), the posting type, and the amount if any. Declines on a status
 -- mark, a comment (which could hold tags or dates), a balance assertion or assignment, or
 -- anything else after the amount.
-scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> Maybe (AccountName, PostingRealness, Maybe Amount)
+scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> Either Text (AccountName, PostingRealness, Maybe Amount)
 scanSimplePosting j parent als line = do
-  -- a comment anywhere, or a status mark: decline
-  guard $ not $ T.any (== ';') line
+  -- a comment anywhere (possibly with tags), or a status mark: decline
+  declineIf (T.any (== ';') line) $ commentDeclineReason "posting" line
   let body = T.dropWhile isNonNewlineSpace line
-  guard $ not $ T.isPrefixOf "*" body || T.isPrefixOf "!" body
+  declineIf (T.isPrefixOf "*" body || T.isPrefixOf "!" body) "posting status mark"
   let (name, r1) = scanSimpleAccountName body
       r2 = T.dropWhile isNonNewlineSpace r1
+  -- a balance assignment (= AMT with no amount before it): decline
+  declineIf (T.isPrefixOf "=" r2) "balance assertion or assignment"
   (mamt, r3) <-
     if T.null r2
-    then Just (Nothing, r2)
-    else do (a, r) <- scanSimpleAmountAndCost j r2; Just (Just a, r)
+    then Right (Nothing, r2)
+    else do (a, r) <- scanSimpleAmountAndCost j r2; Right (Just a, r)
   -- anything else on the line (a balance assertion, eg): decline
-  guard $ T.null $ T.dropWhile isNonNewlineSpace r3
+  let r4 = T.dropWhile isNonNewlineSpace r3
+  declineIf (T.isPrefixOf "=" r4) "balance assertion or assignment"
+  declineIf (not $ T.null r4) "unexpected text after the amount"
   -- as modifiedaccountnamep and postingp do (an alias error declines, to be reported there)
-  full <- either (const Nothing) Just $ accountNameApplyAliases als $ joinAccountNames parent name
-  Just (textUnbracket full, accountNamePostingType full, mamt)
+  full <- either (const $ Left "account alias error") Right $ accountNameApplyAliases als $ joinAccountNames parent name
+  Right (textUnbracket full, accountNamePostingType full, mamt)
 
 -- | An account name as accountnamep parses it, and the text after it: one or more
 -- non-whitespace parts, separated by single spaces (a single tab also separates parts, and
@@ -1285,7 +1344,7 @@ scanSimpleAccountName t = go [part1] r1
 -- it. A total cost's sign follows the amount's, as in costp. Declines on a second cost, a
 -- parenthesised cost, a valuation expression or a lot annotation (anything beginning with
 -- @ ( { or [ after the amount or the cost).
-scanSimpleAmountAndCost :: Journal -> Text -> Maybe (Amount, Text)
+scanSimpleAmountAndCost :: Journal -> Text -> Either Text (Amount, Text)
 scanSimpleAmountAndCost j t = do
   (a, r1) <- scanSimpleAmount j t
   let r2 = T.dropWhile isNonNewlineSpace r1
@@ -1297,13 +1356,13 @@ scanSimpleAmountAndCost j t = do
       (ca, r5) <- scanSimpleAmount j $ T.dropWhile isNonNewlineSpace r4
       let r6 = T.dropWhile isNonNewlineSpace r5
       -- another cost, or a lot annotation: decline
-      guard $ maybe True (\(c, _) -> c `notElem` ("@({[" :: String)) $ T.uncons r6
+      declineIf (maybe False (\(c, _) -> c `elem` ("@({[" :: String)) $ T.uncons r6) "annotation after the cost"
       let amtsign = case signum (aquantity a) of 0 -> 1; sgn -> sgn
           cost | total     = TotalCost ca{aquantity = amtsign * aquantity ca}
                | otherwise = UnitCost ca
-      Just (a{acost = Just cost}, r6)
-    Just (c, _) | c `elem` ("({[" :: String) -> Nothing
-    _ -> Just (a, r2)
+      Right (a{acost = Just cost}, r6)
+    Just (c, _) | c `elem` ("({[" :: String) -> Left "lot or valuation annotation"
+    _ -> Right (a, r2)
 
 -- | An amount without cost, as simpleamountp parses simple ones, and the text after it: an
 -- optional sign, then either an unquoted commodity symbol, optional spaces, an optional second
@@ -1313,41 +1372,43 @@ scanSimpleAmountAndCost j t = do
 -- and the amount's style is built as there. Declines on a quoted symbol, on an exponent, and
 -- on a symbol-less amount when a default commodity (D) directive is in effect (simpleamountp
 -- would apply that commodity and its style).
-scanSimpleAmount :: Journal -> Text -> Maybe (Amount, Text)
+scanSimpleAmount :: Journal -> Text -> Either Text (Amount, Text)
 scanSimpleAmount j t0 = do
   let (sign1, t1) = scanSign t0
-  (c, _) <- T.uncons t1
-  guard $ c /= '"'
+  (c, _) <- orDecline malformed $ T.uncons t1
+  declineIf (c == '"') "quoted commodity symbol"
   if not (isNonsimpleCommodityChar c)
   then do  -- symbol on the left
     let (sym, t2) = T.span (not . isNonsimpleCommodityChar) t1
         (spaced, t3) = scanSpaces t2
         (sign2, t4) = scanSign t3
-    (raw, t5) <- scanSimpleNumber t4
+    (raw, t5) <- orDecline malformed $ scanSimpleNumber t4
     (q, p, mdec, mgrps) <- interpret (suggestedStyle sym) raw
-    Just (nullamt{acommodity=sym, aquantity=sign1 (sign2 q), acost=Nothing
-                 ,astyle=amountstyle{ascommodityside=L, ascommodityspaced=spaced, asprecision=Precision p, asdecimalmark=mdec, asdigitgroups=mgrps}}
-         ,t5)
+    Right (nullamt{acommodity=sym, aquantity=sign1 (sign2 q), acost=Nothing
+                  ,astyle=amountstyle{ascommodityside=L, ascommodityspaced=spaced, asprecision=Precision p, asdecimalmark=mdec, asdigitgroups=mgrps}}
+          ,t5)
   else do
-    (raw, t2) <- scanSimpleNumber t1
+    (raw, t2) <- orDecline malformed $ scanSimpleNumber t1
     let (spaced, t3) = scanSpaces t2
     case T.uncons t3 of
-      Just (c2, _) | c2 == '"' -> Nothing
+      Just (c2, _) | c2 == '"' -> Left "quoted commodity symbol"
                    | not (isNonsimpleCommodityChar c2) -> do  -- symbol on the right
         let (sym, t4) = T.span (not . isNonsimpleCommodityChar) t3
         (q, p, mdec, mgrps) <- interpret (suggestedStyle sym) raw
-        Just (nullamt{acommodity=sym, aquantity=sign1 q, acost=Nothing
-                     ,astyle=amountstyle{ascommodityside=R, ascommodityspaced=spaced, asprecision=Precision p, asdecimalmark=mdec, asdigitgroups=mgrps}}
-             ,t4)
+        Right (nullamt{acommodity=sym, aquantity=sign1 q, acost=Nothing
+                      ,astyle=amountstyle{ascommodityside=R, ascommodityspaced=spaced, asprecision=Precision p, asdecimalmark=mdec, asdigitgroups=mgrps}}
+              ,t4)
       _ -> do  -- no symbol (and no default commodity directive, which would apply: decline)
-        guard $ isNothing $ jparsedefaultcommodity j
+        declineIf (isJust $ jparsedefaultcommodity j) "default commodity directive in effect"
         (q, p, mdec, mgrps) <- interpret (suggestedStyle "") raw
-        Just (nullamt{acommodity="", aquantity=sign1 q, acost=Nothing
-                     ,astyle=amountstyle{asprecision=Precision p, asdecimalmark=mdec, asdigitgroups=mgrps}}
-             ,t2)
+        Right (nullamt{acommodity="", aquantity=sign1 q, acost=Nothing
+                      ,astyle=amountstyle{asprecision=Precision p, asdecimalmark=mdec, asdigitgroups=mgrps}}
+              ,t2)
   where
+    -- a number scanSimpleNumber does not handle, or text which is not an amount at all (an error, usually)
+    malformed = "malformed amount, or number with an exponent"
     suggestedStyle sym = journalDecimalMarkStyle j <|> journalAmountStyleFor j sym
-    interpret msuggested raw = either (const Nothing) Just $ interpretRawNumber (jparsedecimalmark j) msuggested raw Nothing
+    interpret msuggested raw = either (const $ Left "invalid number") Right $ interpretRawNumber (jparsedecimalmark j) msuggested raw Nothing
 
 -- | An optional sign, as signp parses it (a - or +, then optional spaces), as a function to
 -- apply to the quantity; and the text after it.
