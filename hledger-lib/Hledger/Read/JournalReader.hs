@@ -1348,7 +1348,7 @@ scanSimpleTransaction j s0 = do
   -- comment lines continue the comment (transactioncommentp); a tag in any of it: decline
   let (desc, r7) = T.break (== ';') r6
       msameline = T.stripPrefix ";" r7
-      (commentlines, s2, n2) = scanCommentLines s1
+      !(commentlines, s2, n2) = scanCommentLines s1
       year = first3 $ toGregorian date  -- the default year for partial dates in the postings' date tags
   (sps, n) <- scanPostings year s2 (n1 + n2) []
   Right (SimpleTransaction{stDate=date, stDate2=mdate2, stStatus=status, stCode=code, stDescription=T.strip desc
@@ -1358,11 +1358,11 @@ scanSimpleTransaction j s0 = do
   where
     parent  = concatAccountNames $ reverse $ jparseparentaccounts j
     als     = jparsealiases j
-    scanPostings year s n acc = case scanSimpleLine s of
+    scanPostings year s !n acc = case scanSimpleLine s of
       Just (line, s', k)
         | isIndented line -> do
             -- a posting line, and any following indented comment lines (its comment's continuation)
-            let (commentlines, s'', k') = scanCommentLines s'
+            let !(commentlines, s'', k') = scanCommentLines s'
             p <- scanSimplePosting j year parent als line commentlines
             scanPostings year s'' (n + k + k') (p : acc)
         | otherwise -> Right (reverse acc, n)
@@ -1385,19 +1385,24 @@ scanSimpleLine s
   | T.null s = Nothing
   | otherwise =
       let (line, rest) = T.break (== '\n') s
+          !rest' = T.drop 1 rest
+          !n = T.length line + (if T.null rest then 0 else 1)
       in if T.any (== '\r') line
          then Nothing
-         else Just (line, T.drop 1 rest, T.length line + (if T.null rest then 0 else 1))
+         else Just (line, rest', n)
 
 -- | Consume any following comment lines (indented lines beginning with a semicolon, as
 -- followingcommentpWith recognises them), returning their texts after the semicolon, the text
--- after them, and the number of characters consumed.
+-- after them, and the number of characters consumed. (The next line is usually a posting,
+-- so it is checked before being split off.)
 scanCommentLines :: Text -> ([Text], Text, Int)
 scanCommentLines = go [] 0
   where
-    go acc n s = case scanSimpleLine s of
-      Just (line, s', k) | startsWithSpace line, Just r <- T.stripPrefix ";" (T.dropWhile isNonNewlineSpace line) -> go (r : acc) (n + k) s'
-      _ -> (reverse acc, s, n)
+    go acc !n s
+      | startsWithSpace s, Just r <- T.stripPrefix ";" (T.dropWhile isNonNewlineSpace s)
+      , Just (_, s', k) <- scanSimpleLine s
+      = go (T.takeWhile (/= '\n') r : acc) (n + k) s'
+      | otherwise = (reverse acc, s, n)
 
 -- | A date as datep parses it, given the default year, and the text after it. A full date has a
 -- four-digit year (datep also allows longer ones; those decline), a - / or . separator, a one-
