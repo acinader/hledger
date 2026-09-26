@@ -128,3 +128,6 @@ account ai
 
 2026-09-26 sm | ghci vs compiled stats speed check
     (ai)                                         9 kt
+
+2026-09-26 sm | jjui#751 vscode repro
+    (ai)                                         14 kt
