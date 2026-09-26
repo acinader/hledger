@@ -453,8 +453,14 @@ warningOverlay msg nolder =
   Widget Greedy Greedy $ do
     c <- getContext
     render $
-      translateBy (Location (0, c^.availHeightL - 1)) $
+      translateLayer (Location (0, c^.availHeightL - 1)) $
       withAttr (attrName "warning") $ str $
       " Warning: " ++ takeWhile (/='\n') msg ++ morestr ++ " "
   where
     morestr = if nolder > 0 then " (and " ++ show nolder ++ " more)" else ""
+
+#if !MIN_VERSION_brick(3,0,0)
+-- | brick 3.0 renamed translateBy to translateLayer.
+translateLayer :: Location -> Widget n -> Widget n
+translateLayer = translateBy
+#endif

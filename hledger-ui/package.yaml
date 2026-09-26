@@ -94,7 +94,7 @@ library:
   - time >=1.5
   - transformers
   - vector
-  - brick >=2.1.1 && <2.3.2 || >=2.4 && <3   # avoid 2.3.2 for something or other
+  - brick >=2.1.1 && <2.3.2 || >=2.4 && <3.1   # avoid 2.3.2 for something or other
   - vty >=6.1
   - vty-crossplatform >= 0.4.0.0
   when:
@@ -126,7 +126,7 @@ tests:
     - hledger-ui
     - hledger-lib >=1.99 && <1.100
     - hledger >=1.99 && <1.100
-    - brick >=2.1.1 && <2.3.2 || >=2.4 && <3   # avoid 2.3.2 for something or other
+    - brick >=2.1.1 && <2.3.2 || >=2.4 && <3.1   # avoid 2.3.2 for something or other
     - vty >=6.1
     - vty-crossplatform >= 0.4.0.0
     - tasty >=1.2.3

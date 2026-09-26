@@ -120,7 +120,7 @@ esHandle ESS{..} ev = do
 -- Keep in sync with 'Hledger.Data.Transaction.showGenericSourcePos'
 hledgerparseerrorpositionp :: ParsecT Void String t (String, Int, Int)
 hledgerparseerrorpositionp = do
-  anySingle `manyTill` char '"'
+  anySingle `manyTill` single '"'
   f <- anySingle `manyTill` (oneOf ['"','\n'])
   choice [
       do
@@ -132,9 +132,9 @@ hledgerparseerrorpositionp = do
       do
           string " (lines "
           l <- read <$> some digitChar
-          char '-'
+          single '-'
           some digitChar
-          char ')'
+          single ')'
           return (f, l, 1)
       ]
 
