@@ -101,8 +101,8 @@ A journal using lots adds work in the lot stages (about 0.4s for 1000 lot transa
 
 ## How a journal's shape affects performance
 
-Some observations, using the 2026-09 m5 measurements above to make things concrete; scale these
-numbers appropriately for your machine). In short: run time grows with the number of postings and 
+Here are some observations, using the 2026-09 measurements above to make things concrete; scale these
+numbers appropriately for your machine. In short: run time grows with the number of postings and 
 with how much each entry uses beyond the basics, and reports that produce a lot of output take longer
 than the reading which precedes them.
 
@@ -123,8 +123,14 @@ cost the same as plain ones.
 
 **Directives.** Price (P) directives each cost about as much as a simple transaction to parse,
 so a large price history adds up: 100k of them add about 0.2s. Commodity and account
-directives are cheap. Balance assertions and assignments make the transaction balancer do a
-second pass, tracking every account's running balance in date order. Auto posting rules, periodic
+directives are cheap. A single balance assertion or assignment makes the transaction balancer do a
+second pass, tracking every account's running balance in date order: about 8% more time and 300 MB
+more allocation on a 100k journal, the same whether one posting or every posting is asserted.
+Each further ordinary assertion costs little: under 1µs to check, and about 3µs to parse (an
+asserted posting takes the general parser). Inclusive assertions (`=*`) are the exception: each
+one scans every account's running balance, so many of them on a journal with many accounts are
+slow (20k of them on a 10k-transaction, 1000-account journal: 0.36s, 13x the ordinary kind).
+`-I` skips the checking pass, but not the parsing. Auto posting rules, periodic
 transaction rules (with --forecast), and lot tracking each add processing stages; a journal using
 lots pays for lot processing on every command, even ones that don't show lots (about 0.4s more
 on a 100k journal with 1000 lot transactions).
