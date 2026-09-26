@@ -1798,6 +1798,37 @@ ai-ccusagej-recent *BALARGS:
 @ai-ccusagej-recent-watch *BALARGS:
     while true; do just ai-ccusagej-recent -c1.kt {{ BALARGS }}; echo; read -p "press enter to update.."; done
 
+CCPROJECTS := '~/.claude/projects'
+
+# jq program summing output tokens in claude code transcripts, between epoch times $from and $to.
+# Deduplicates by message and request id, since a response is often logged on several lines (ccusage session --id doesn't do this).
+AI_OUTPUT_JQ := '[.[] | select(.message.usage) | select((.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdate) as $t | $t >= $from and $t < $to)] | unique_by([.message.id, .requestId]) | [.[].message.usage.output_tokens] | add // 0'
+
+# Show one claude code session's output tokens (kt), including its subagents; optionally only those since a time (gdate syntax). Unlike the daily numbers, not affected by other concurrent sessions.
+ai-session SESSIONID SINCE='1970-01-01':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    files=({{ CCPROJECTS }}/*/{{ SESSIONID }}*.jsonl)
+    if [[ ${#files[@]} -ne 1 ]]; then echo "expected one transcript matching {{ SESSIONID }}, found ${#files[@]}" >&2; exit 1; fi
+    main=${files[0]}
+    from=$(gdate -d '{{ SINCE }}' +%s)
+    cat "$main" "${main%.jsonl}"/subagents/*.jsonl \
+      | jq -s -r --argjson from "$from" --argjson to 9999999999 '({{ AI_OUTPUT_JQ }}) / 1000 | "\(.) kt"'
+
+# List the claude code sessions active on a day (default today), with their output tokens (kt) that day, and the total.
+ai-sessions DATE='today':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    day=$(gdate -d '{{ DATE }}' +%F)
+    from=$(gdate -d "$day" +%s)
+    to=$(gdate -d "$day +1 day" +%s)
+    for main in $(find {{ CCPROJECTS }}/ -mindepth 2 -maxdepth 2 -name '*.jsonl' -newermt "$(gdate -d @$from "+%F %T")"); do
+      kt=$(cat "$main" "${main%.jsonl}"/subagents/*.jsonl | jq -s --argjson from "$from" --argjson to "$to" '({{ AI_OUTPUT_JQ }}) / 1000')
+      [[ $kt == 0 ]] || printf "%8.1f kt  %s  %s\n" "$kt" "$(basename "$main" .jsonl)" "$(basename "$(dirname "$main")")"
+    done | sort -rn | awk '{print} {t+=$1} END {printf "%8.1f kt  total\n", t}'
+
 # Extract the "AI usage:" disclosure lines from commit messages to aicommits.csv.
 @ai-commits-csv:
     tools/aicommits > {{ AIDIR }}/aicommits.csv
