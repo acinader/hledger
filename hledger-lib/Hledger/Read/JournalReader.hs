@@ -257,7 +257,7 @@ addJournalItemP iopts = (<?> "transaction or directive") $ do
      | isSpace c || isLineCommentStart c -> blankorcommentitem <|> anyitem
      | otherwise                         -> anyitem
   where
-    transactionitem    = transactionOrFastp >>= modify' . addTransactionItem
+    transactionitem    = transactionOrFastp >>= modify' . addTransactionItem   -- (fastPathEnabled disables the fast path)
     priceitem          = recordItem JIDirective marketpriceOrFastp >>= modify' . addPriceDirective
     blankorcommentitem = recordItem commentOrBlankItem $ lift emptyorcommentlinep
     anyitem = choice [
@@ -1025,7 +1025,14 @@ transactionp = do
 -- shareText and shareAmountStyle), add a case to hledger/test/journal/fastpath.test, and run
 -- the whole functional test suite in check mode (below) to confirm the two parsers still agree.
 
--- | Whether the fast path is used, as set by the HLEDGER_FASTPATH environment variable (for
+-- | To disable the fast path entirely, eg while investigating a parsing problem, set this to
+-- False: transactions and price directives are then parsed by the general parsers only,
+-- exactly as before the fast path existed. (At run time, setting HLEDGER_FASTPATH=off in the
+-- environment does the same, without rebuilding; see fastPathMode.)
+fastPathEnabled :: Bool
+fastPathEnabled = True
+
+-- | How the fast path is used, as set by the HLEDGER_FASTPATH environment variable (for
 -- testing): unset or empty means use it; "off" means don't; "check" means use it, and also
 -- parse each fast-path entry with the general parser and fail if the results differ.
 -- The variable is read once, when first needed (hence unsafePerformIO and NOINLINE),
@@ -1044,7 +1051,9 @@ fastPathMode = unsafePerformIO $ fromMaybe "" <$> lookupEnv "HLEDGER_FASTPATH"
 -- If they agree, the fast path's end state is restored (so that the journal keeps its result,
 -- and its parse-time sharing sets); otherwise the parse fails with a message showing both.
 withFastPath :: (Eq a, Show a) => FastPathKind -> (a -> a) -> JournalParser m (Either Text a) -> JournalParser m a -> JournalParser m a
-withFastPath kind norm fastp generalp = case fastPathMode of
+withFastPath kind norm fastp generalp
+  | not fastPathEnabled = generalp
+  | otherwise = case fastPathMode of
   "off"   -> generalp
   "check" -> do
     st0 <- getParserState
