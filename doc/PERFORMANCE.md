@@ -114,12 +114,12 @@ about 1.5 KB of live data per simple transaction, 3 KB per real-world one, and t
 about three times that. So a 100k-transaction journal needs about 0.5 GB, and a million
 transactions about 5 GB (or a third less with `+RTS -c -RTS`, see below).
 
-**Entry shape.** Parsing is usually about half of a run. Entries with just a date, description,
-account names and amounts (optionally with a cost) take a fast path in the parser and parse
-about a third faster than others. Entries with comments or tags, balance assertions, transaction
-codes, secondary dates, posting status marks, or lot annotations use the general parser. Long
-descriptions and account names cost little. Numbers with digit group marks and decimal marks
-cost the same as plain ones.
+**Entry shape.** Parsing is usually about half of a run. Entries with just dates, status marks,
+a code, a description, account names and amounts (optionally with a cost) take a fast path in
+the parser and parse about a third faster than others. Entries with comments or tags, balance
+assertions, lot annotations, quoted commodity symbols or exponents use the general parser
+(`--debug=1` reports how many, and why). Long descriptions and account names cost little.
+Numbers with digit group marks and decimal marks cost the same as plain ones.
 
 **Directives.** Price (P) directives each cost about as much as a simple transaction to parse,
 so a large price history adds up: 100k of them add about 0.2s. Commodity and account
@@ -279,9 +279,10 @@ so `stack bench hledger` does nothing; to use it, enable it there.
   for everything 0.18s, against about 0.9s for the megaparsec parser, and a minimal transaction
   still cost 65% of a full one. So the journal reader now has a fast path (fasttransactionp,
   fastmarketpricedirectivep in JournalReader.hs): before running the general transaction or
-  price directive parser, it scans the text directly for the commonest shape of entry (full
-  date, optional status, plain description; postings with an account name and a simple amount,
-  optionally with a cost) and builds the same result, declining to the general parser for
+  price directive parser, it scans the text directly for the commonest shapes of entry (a date,
+  optionally a secondary date, status mark and code, and a plain description; postings with an
+  optional status mark, an account name and a simple amount, optionally with a cost; price
+  directives, optionally with a time of day) and builds the same result, declining to the general parser for
   anything else, including anything that would be an error, so results and error messages are
   unchanged. It reuses the general parser's number interpretation, so declared styles and
   decimal marks behave the same. This took the parse from 0.92s to 0.63s and halved allocation.

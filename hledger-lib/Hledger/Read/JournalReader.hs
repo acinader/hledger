@@ -1115,10 +1115,13 @@ commentDeclineReason what line
   | T.any (== ':') (T.drop 1 $ T.dropWhile (/= ';') line) = what <> " comment with tag"
   | otherwise = what <> " comment"
 
--- | The parts of a simple transaction recognised by scanSimpleTransaction: date, status,
--- description, and each posting's account name (parent account and aliases applied, brackets
--- removed), posting type, and amount if any.
-data SimpleTransaction = SimpleTransaction !Day !Status !Text ![(AccountName, PostingRealness, Maybe Amount)]
+-- | The parts of a simple transaction recognised by scanSimpleTransaction: date, secondary
+-- date, status, code, description, and postings.
+data SimpleTransaction = SimpleTransaction !Day !(Maybe Day) !Status !Text !Text ![SimplePosting]
+
+-- | The parts of a simple posting recognised by scanSimplePosting: status, account name
+-- (parent account and aliases applied, brackets removed), posting type, and amount if any.
+data SimplePosting = SimplePosting !Status !AccountName !PostingRealness !(Maybe Amount)
 
 -- | A fast path for the commonest kind of transaction: if the input begins with one, parse
 -- it, consuming its lines; otherwise consume nothing and return the reason for declining, so
@@ -1126,11 +1129,12 @@ data SimpleTransaction = SimpleTransaction !Day !Status !Text ![(AccountName, Po
 -- but much more cheaply, by scanning the text directly instead of running megaparsec parsers
 -- (which allocate heavily per token). A simple transaction has:
 --
--- - a full date (YYYY-MM-DD, or with / or . separators), an optional * or ! status mark, and
---   a description with no comment, code or secondary date;
--- - zero or more postings, each an indented line with an account name (possibly in parens or
---   brackets) and optionally an amount; no status mark, comment, balance assertion or lot
---   annotation;
+-- - a date (YYYY-MM-DD, or with / or . separators; or MM-DD, using the default year), an
+--   optional secondary date, an optional * or ! status mark, an optional (code), and a
+--   description with no comment;
+-- - zero or more postings, each an indented line with an optional status mark, an account name
+--   (possibly in parens or brackets) and optionally an amount; no comment, balance assertion or
+--   lot annotation;
 -- - amounts whose number is digits, with or without digit group marks, a decimal mark and decimal
 --   digits (as rawnumberp accepts; but no exponent), with an optional sign, an optional unquoted
 --   commodity symbol on either side, and an optional @ or @@ cost of the same form;
@@ -1146,7 +1150,7 @@ fasttransactionp = do
   s <- getInput
   case scanSimpleTransaction j s of
     Left reason -> return $ Left reason
-    Right (SimpleTransaction date status desc sps, consumed) -> do
+    Right (SimpleTransaction date mdate2 status code desc sps, consumed) -> do
       startpos <- getSourcePos'
       -- share the account names, symbols and styles with identical earlier ones, as postingp does
       ps <- mapM internPosting sps
@@ -1154,14 +1158,14 @@ fasttransactionp = do
       -- so updating the input and the offset is all that is needed
       updateParserState $ \st -> st{stateInput = T.drop consumed s, stateOffset = stateOffset st + consumed}
       endpos <- getSourcePos'
-      -- the same value transactionp builds: no secondary date, code, comment or tags;
+      -- the same value transactionp builds: no comment or tags;
       -- the index and preceding comment are filled in later, as for any transaction
-      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date Nothing status "" desc "" [] ps
+      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date mdate2 status code desc "" [] ps
   where
-    internPosting (acct, ptype, mamt) = do
+    internPosting (SimplePosting st acct ptype mamt) = do
       acct' <- shareText acct
       mamt' <- traverse internSimpleAmount mamt
-      return posting{paccount=acct', pamount=maybe missingmixedamt mixedAmount mamt', preal=ptype}
+      return posting{pstatus=st, paccount=acct', pamount=maybe missingmixedamt mixedAmount mamt', preal=ptype}
 
 -- | Share a scanned amount's commodity symbol and style (and its cost amount's) with identical
 -- ones parsed earlier, as simpleamountp does, so that equal values point to one heap object.
@@ -1178,9 +1182,9 @@ internSimpleAmount a = do
     internCost (TotalCost ca) = TotalCost <$> internSimpleAmount ca
 
 -- | A fast path for the commonest kind of market price directive, like fasttransactionp:
--- P, a full date, an unquoted commodity symbol, and a simple amount (as described there),
--- separated by spaces, then optionally other text, which is ignored (as marketpricedirectivep
--- does). Declines otherwise, eg if a time of day follows the date.
+-- P, a date, an optional time of day (ignored), an unquoted commodity symbol, and a simple
+-- amount (as described there), separated by spaces, then optionally other text, which is
+-- ignored (as marketpricedirectivep does). Declines otherwise.
 fastmarketpricedirectivep :: JournalParser m (Either Text PriceDirective)
 fastmarketpricedirectivep = do
   j <- get
@@ -1198,23 +1202,28 @@ fastmarketpricedirectivep = do
 -- | Recognise a simple market price directive (see fastmarketpricedirectivep) at the start of
 -- the text, returning its date, commodity symbol and price amount, and the number of characters
 -- consumed (through the line's newline). Mirrors marketpricedirectivep: P, optional spaces, a
--- date, at least one space, the commodity symbol, at least one space, the amount; and then the
--- rest of the line is ignored, whatever it is (as restofline does there). Declines if a time of
--- day follows the date, if the symbol is quoted, or if a cost or lot annotation follows the amount.
+-- date, at least one space, optionally a time of day and at least one space, the commodity
+-- symbol, at least one space, the amount; and then the rest of the line is ignored, whatever it
+-- is (as restofline does there). Declines if the symbol is quoted, or if a cost or lot
+-- annotation follows the amount.
 scanSimplePrice :: Journal -> Text -> Either Text (Day, CommoditySymbol, Amount, Int)
 scanSimplePrice j s = do
   (line, _, n) <- orDecline "CR line ending" $ scanSimpleLine s  -- (the text is not empty: it begins with P)
   r0 <- orDecline "malformed price directive" $ T.stripPrefix "P" line
-  (date, r1) <- orDecline "date not in simple YYYY-MM-DD form" $ scanSimpleDate $ T.dropWhile isNonNewlineSpace r0
-  -- at least one space, then the symbol (a digit here would be a time of day: decline)
-  declineIf (not $ maybe False (isNonNewlineSpace . fst) $ T.uncons r1) "malformed price directive"
-  let r2 = T.dropWhile isNonNewlineSpace r1
+  (date, r1) <- orDecline "unusual date form" $ scanSimpleDate (jparsedefaultyear j) $ T.dropWhile isNonNewlineSpace r0
+  declineIf (not $ startsWithSpace r1) "malformed price directive"
+  -- a digit here begins a time of day, which is ignored; then at least one space
+  r2 <- case T.uncons (T.dropWhile isNonNewlineSpace r1) of
+    Just (c, _) | isDigit c -> do
+      r <- orDecline "unusual time of day in price directive" $ scanTimeOfDay $ T.dropWhile isNonNewlineSpace r1
+      declineIf (not $ startsWithSpace r) "malformed price directive"
+      Right $ T.dropWhile isNonNewlineSpace r
+    _ -> Right $ T.dropWhile isNonNewlineSpace r1
   (c, _) <- orDecline "malformed price directive" $ T.uncons r2
-  declineIf (isDigit c) "time of day in price directive"
   declineIf (c == '"') "quoted commodity symbol"
   declineIf (isNonsimpleCommodityChar c) "malformed price directive"
   let (sym, r3) = T.span (not . isNonsimpleCommodityChar) r2
-  declineIf (not $ maybe False (isNonNewlineSpace . fst) $ T.uncons r3) "malformed price directive"
+  declineIf (not $ startsWithSpace r3) "malformed price directive"
   (amt, r4) <- scanSimpleAmount j $ T.dropWhile isNonNewlineSpace r3
   -- a cost or lot annotation on the price: decline; anything else is ignored
   declineIf (maybe False (\(c', _) -> c' `elem` ("@({[" :: String)) $ T.uncons $ T.dropWhile isNonNewlineSpace r4) "annotation on the price amount"
@@ -1222,33 +1231,47 @@ scanSimplePrice j s = do
 
 -- | Recognise a simple transaction (see fasttransactionp) at the start of the text, returning
 -- its parts and the number of characters consumed (through the newline of its last line).
--- The first line is scanned as transactionp parses it: a date, then whitespace or the end of
--- the line, an optional status mark, and the description (whitespace-stripped). Then, as
--- postingsp does, each following indented line is taken as a posting, until a line that is
--- not indented, or the end of the text. Since a decline must consume nothing, one posting the
--- scanner does not handle declines the whole transaction.
+-- The first line is scanned as transactionp parses it: a date, an optional secondary date,
+-- then whitespace or the end of the line, an optional status mark, an optional code, and the
+-- description (whitespace-stripped). Then, as postingsp does, each following indented line is
+-- taken as a posting, until a line that is not indented, or the end of the text. Since a
+-- decline must consume nothing, one posting the scanner does not handle declines the whole
+-- transaction.
 scanSimpleTransaction :: Journal -> Text -> Either Text (SimpleTransaction, Int)
 scanSimpleTransaction j s0 = do
   (line1, s1, n1) <- orDecline "CR line ending" $ scanSimpleLine s0  -- (the text is not empty: it begins with a digit)
-  (date, r1) <- orDecline "date not in simple YYYY-MM-DD form" $ scanSimpleDate line1
-  -- the date must be followed by whitespace or the end of the line, as transactionp requires
-  -- (= would begin a secondary date; anything else is an error)
-  r2 <- case T.uncons r1 of
-    Nothing -> Right r1
-    Just (c, _) | isNonNewlineSpace c -> Right $ T.dropWhile isNonNewlineSpace r1
-                | c == '='            -> Left "secondary date"
+  (date, r1) <- orDecline "unusual date form" $ scanSimpleDate (jparsedefaultyear j) line1
+  -- an optional secondary date, as secondarydatep parses it: = and a date, partial ones
+  -- taking the primary date's year
+  (mdate2, r2) <- case T.uncons r1 of
+    Just ('=', r) -> do
+      (date2, r') <- orDecline "unusual secondary date form" $ scanSimpleDate (Just $ first3 $ toGregorian date) r
+      Right (Just date2, r')
+    _ -> Right (Nothing, r1)
+  -- then whitespace or the end of the line, as transactionp requires (anything else is an error)
+  r3 <- case T.uncons r2 of
+    Nothing -> Right r2
+    Just (c, _) | isNonNewlineSpace c -> Right $ T.dropWhile isNonNewlineSpace r2
     _ -> Left "unexpected text after the date"
-  let (status, r3) = case T.uncons r2 of
+  let (status, r4) = case T.uncons r3 of
         Just ('*', r) -> (Cleared, r)
         Just ('!', r) -> (Pending, r)
-        _             -> (Unmarked, r2)
-      r4 = T.dropWhile isNonNewlineSpace r3
-  -- a transaction code (which codep would parse), or a comment (which transactioncommentp would,
-  -- possibly with tags): decline
-  declineIf (T.isPrefixOf "(" r4) "transaction code"
-  declineIf (T.any (== ';') r4) $ commentDeclineReason "transaction" r4
+        _             -> (Unmarked, r3)
+      r5 = T.dropWhile isNonNewlineSpace r4
+      -- codep requires at least one space before the code's ( : after the status mark if
+      -- there is one, otherwise the whitespace after the date will do
+      spacedbeforecode = status == Unmarked || startsWithSpace r4
+  -- an optional code in parentheses, as codep parses it
+  (code, r6) <- case T.uncons r5 of
+    Just ('(', r) | spacedbeforecode -> do
+      let (c, r') = T.break (== ')') r
+      r'' <- orDecline "unclosed transaction code" $ T.stripPrefix ")" r'
+      Right (c, r'')
+    _ -> Right ("", r5)
+  -- a comment (which transactioncommentp would parse, possibly with tags): decline
+  declineIf (T.any (== ';') r6) $ commentDeclineReason "transaction" r6
   (sps, n) <- scanPostings s1 n1 []
-  Right (SimpleTransaction date status (T.strip r4) sps, n)
+  Right (SimpleTransaction date mdate2 status code (T.strip r6) sps, n)
   where
     parent  = concatAccountNames $ reverse $ jparseparentaccounts j
     als     = jparsealiases j
@@ -1281,39 +1304,79 @@ scanSimpleLine s
          then Nothing
          else Just (line, T.drop 1 rest, T.length line + (if T.null rest then 0 else 1))
 
--- | A full date as datep parses it, and the text after it: a four-digit year (datep also allows
--- longer ones; those decline), a - / or . separator, a one- or two-digit month, the same separator
--- again, and a one- or two-digit day. Declines if it is not a valid calendar date (datep reports
--- an error for that), or is a partial date (datep would need the default year for that).
-scanSimpleDate :: Text -> Maybe (Day, Text)
-scanSimpleDate t = do
-  let (y, r1) = T.span isDigit t
-  guard $ T.length y == 4
+-- | A date as datep parses it, given the default year, and the text after it. A full date has a
+-- four-digit year (datep also allows longer ones; those decline), a - / or . separator, a one-
+-- or two-digit month, the same separator again, and a one- or two-digit day. A partial date has
+-- just a one- or two-digit month, a separator and a one- or two-digit day, and takes the default
+-- year. Declines if the date has another shape, is not a valid calendar date (datep reports an
+-- error for that), or is partial when there is no default year (likewise).
+scanSimpleDate :: Maybe Year -> Text -> Maybe (Day, Text)
+scanSimpleDate mdefaultyear t = do
+  let (n1, r1) = T.span isDigit t
   (sep, r2) <- T.uncons r1
   guard $ sep == '-' || sep == '/' || sep == '.'
-  let (m, r3) = T.span isDigit r2
-  guard $ T.length m == 1 || T.length m == 2
-  (sep2, r4) <- T.uncons r3
-  guard $ sep2 == sep
-  let (d, r5) = T.span isDigit r4
-  guard $ T.length d == 1 || T.length d == 2
-  date <- fromGregorianValid (readDecimal y) (fromInteger $ readDecimal m) (fromInteger $ readDecimal d)
-  Just (date, r5)
+  let (n2, r3) = T.span isDigit r2
+  guard $ T.length n2 == 1 || T.length n2 == 2
+  if T.length n1 == 4
+  then do  -- a full date: year, month, day
+    (sep2, r4) <- T.uncons r3
+    guard $ sep2 == sep
+    let (n3, r5) = T.span isDigit r4
+    guard $ T.length n3 == 1 || T.length n3 == 2
+    date <- fromGregorianValid (readDecimal n1) (fromInteger $ readDecimal n2) (fromInteger $ readDecimal n3)
+    Just (date, r5)
+  else do  -- a partial date: month, day, in the default year
+    guard $ T.length n1 == 1 || T.length n1 == 2
+    y <- mdefaultyear
+    date <- fromGregorianValid y (fromInteger $ readDecimal n1) (fromInteger $ readDecimal n2)
+    Just (date, r3)
+
+-- | Skip a time of day as timeofdayp parses it (two-digit hour and minute, optionally a
+-- two-digit second, optionally a +HHMM or -HHMM time zone), returning the text after it;
+-- or Nothing if the text does not begin with a valid one.
+scanTimeOfDay :: Text -> Maybe Text
+scanTimeOfDay t0 = do
+  (h, r1) <- twoDigits t0
+  guard $ h <= 23
+  r2 <- T.stripPrefix ":" r1
+  (m, r3) <- twoDigits r2
+  guard $ m <= 59
+  r4 <- case T.stripPrefix ":" r3 of
+    Just r  -> do (sec, r') <- twoDigits r; guard (sec <= 59); Just r'
+    Nothing -> Just r3
+  Just $ fromMaybe r4 $ do  -- an optional time zone
+    (c, r5) <- T.uncons r4
+    guard $ c == '+' || c == '-'
+    let (ds, r6) = T.span isDigit r5
+    guard $ T.length ds == 4
+    Just r6
+  where
+    twoDigits t = let (ds, r) = T.span isDigit t in if T.length ds == 2 then Just (readDecimal ds, r) else Nothing
+
+-- | Does the text begin with a non-newline space ?
+startsWithSpace :: Text -> Bool
+startsWithSpace = maybe False (isNonNewlineSpace . fst) . T.uncons
 
 -- | A simple posting line (see fasttransactionp), scanned as postingp parses it: indentation,
--- the account name, and optionally an amount with cost; returning the account name (with the
--- parent account and aliases applied, as modifiedaccountnamep does, and virtual posting brackets
--- removed, as postingp does), the posting type, and the amount if any. Declines on a status
--- mark, a comment (which could hold tags or dates), a balance assertion or assignment, or
--- anything else after the amount.
-scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> Either Text (AccountName, PostingRealness, Maybe Amount)
+-- an optional status mark, the account name, and optionally an amount with cost; returning the
+-- status, the account name (with the parent account and aliases applied, as modifiedaccountnamep
+-- does, and virtual posting brackets removed, as postingp does), the posting type, and the
+-- amount if any. Declines on a comment (which could hold tags or dates), a balance assertion or
+-- assignment, or anything else after the amount.
+scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> Either Text SimplePosting
 scanSimplePosting j parent als line = do
-  -- a comment anywhere (possibly with tags), or a status mark: decline
+  -- a comment anywhere (possibly with tags): decline
   declineIf (T.any (== ';') line) $ commentDeclineReason "posting" line
-  let body = T.dropWhile isNonNewlineSpace line
-  declineIf (T.isPrefixOf "*" body || T.isPrefixOf "!" body) "posting status mark"
+  -- an optional status mark, as statusp parses it, then spaces
+  let (status, body) = case T.uncons $ T.dropWhile isNonNewlineSpace line of
+        Just ('*', r) -> (Cleared, T.dropWhile isNonNewlineSpace r)
+        Just ('!', r) -> (Pending, T.dropWhile isNonNewlineSpace r)
+        Just _        -> (Unmarked, T.dropWhile isNonNewlineSpace line)
+        Nothing       -> (Unmarked, "")
   let (name, r1) = scanSimpleAccountName body
       r2 = T.dropWhile isNonNewlineSpace r1
+  -- a status mark and nothing else is an error (accountnamep needs at least one character)
+  declineIf (T.null name) "malformed posting"
   -- a balance assignment (= AMT with no amount before it): decline
   declineIf (T.isPrefixOf "=" r2) "balance assertion or assignment"
   (mamt, r3) <-
@@ -1326,7 +1389,7 @@ scanSimplePosting j parent als line = do
   declineIf (not $ T.null r4) "unexpected text after the amount"
   -- as modifiedaccountnamep and postingp do (an alias error declines, to be reported there)
   full <- either (const $ Left "account alias error") Right $ accountNameApplyAliases als $ joinAccountNames parent name
-  Right (textUnbracket full, accountNamePostingType full, mamt)
+  Right $ SimplePosting status (textUnbracket full) (accountNamePostingType full) mamt
 
 -- | An account name as accountnamep parses it, and the text after it: one or more
 -- non-whitespace parts, separated by single spaces (a single tab also separates parts, and
