@@ -11,7 +11,10 @@ Done in 2026-09: the megaparsec regression (fixed upstream in megaparsec 9.8.3, 
 [megaparsec#613](https://github.com/mrkkrp/megaparsec/pull/613); pinned in all stack configs);
 the residency reductions (strict parser accumulators, shared amount styles, account names and
 commodity symbols: 2.6 -> 1.5 KB per transaction); cheaper cost annotation parsing; and the
-parser fast path for simple transactions and prices (parse 0.92 -> 0.63s, allocation halved).
+parser fast path for simple transactions and prices (parse 0.92 -> 0.63s, allocation halved);
+and, prompted by a real 21k-transaction journal where finalising was 40% of the run, a one-pass
+account tree builder, cheaper account type inference, and tag propagation that leaves untagged
+postings alone.
 
 ## Remaining ideas, ranked
 
@@ -29,8 +32,9 @@ Expected gains are for the 100k balance run; "general" means every command pays 
 3. Remaining lot overhead on lot journals, ~0.36s: calculateLots still sorts, rebuilds and re-ties
    every transaction (0.135s); basis-from-account-name and transacted-cost inference search every
    account name (0.07s); commodity tags, method coherence.
-4. Small finalise stages, ~1-2% each: style inference (0.04s), account types (plus the regex
-   fallback on every untyped-account lookup, accountNameInferType), cost tagging.
+4. Small finalise stages, ~1-2% each: style inference (0.04s), cost tagging; the account types
+   stage is now mostly journalAccountNamesUsed (a set of 200k posting account names), which
+   several stages compute separately and could share.
 5. Remaining memory: the steady state is mostly postings, amounts and their maps, transactions,
    and descriptions (slices of the input text, which keep it alive). (The compacting collector,
    `+RTS -c`, was measured: 20-40% less memory for 40-60% more time; see PERFORMANCE. It's now
