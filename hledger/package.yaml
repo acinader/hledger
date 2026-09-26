@@ -215,8 +215,7 @@ library:
   # - Hledger.Cli.Version
   other-modules:
   - Hledger.Cli.Commands.Balance.Internal
-  - Paths_hledger
-  autogen-modules:
+  generated-other-modules:
   - Paths_hledger
   dependencies:
   - Diff >=1.0  # for Data.Algorithm.DiffContext's context-diff API
