@@ -1125,18 +1125,75 @@ commentText msameline nextlines = case (msameline, nextlines) of
   (Nothing, []) -> ""
   _ -> T.unlines $ map T.strip $ fromMaybe "" msameline : nextlines
 
--- | Could this comment text contain a tag ? True if it has a colon (any colon makes
--- commentlinetagsp parse a tag). Such comments decline, for now.
-commentHasTag :: Text -> Bool
-commentHasTag = T.any (== ':')
+-- | The tags in a transaction comment line's text (after the semicolon), as commentlinetagsp
+-- parses them: a colon ends a tag name, which is the last whitespace-separated word before it
+-- (if there is none, the colon is just skipped); the tag's value is the whitespace-stripped text
+-- up to the next comma or the end of the line; and so on along the line.
+scanTransactionTags :: Text -> [Tag]
+scanTransactionTags t =
+  let (before, rest) = T.break (== ':') t
+      name = T.takeWhileEnd (not . isSpace) before
+  in case T.stripPrefix ":" rest of
+    Nothing -> []
+    Just aftercolon
+      | T.null name -> scanTransactionTags aftercolon
+      | otherwise ->
+          let (valtext, rest2) = T.break (== ',') $ T.dropWhile isNonNewlineSpace aftercolon
+          in (name, T.strip valtext) : scanTransactionTags (dropComma rest2)
 
--- | The parts of a simple transaction recognised by scanSimpleTransaction: date, secondary
--- date, status, code, description, comment, and postings.
-data SimpleTransaction = SimpleTransaction !Day !(Maybe Day) !Status !Text !Text !Text ![SimplePosting]
+-- | The tags, and the posting dates from date: and date2: tags, in a posting comment line's
+-- text, as commenttagsanddatesp parses them, given the transaction's year for partial dates.
+-- Like scanTransactionTags, except that after a colon with no tag name, spaces and a comma are
+-- skipped, and a date tag's value must begin with a date, which is returned as well.
+-- Returns Nothing if a date tag's value does not begin with a date scanSimpleDate handles (the
+-- general parser accepts a few more forms, and reports invalid ones). The text must not contain
+-- a bracketed date (callers decline those).
+scanPostingTags :: Year -> Text -> Maybe ([Tag], [(TagName, Day)])
+scanPostingTags year t =
+  let (before, rest) = T.break (== ':') t
+      name = T.takeWhileEnd (not . isSpace) before
+  in case T.stripPrefix ":" rest of
+    Nothing -> Just ([], [])
+    Just aftercolon -> do
+      let r = T.dropWhile isNonNewlineSpace aftercolon
+          (valtext, rest2) = T.break (== ',') r
+          val = T.strip valtext
+      (tags, dates, rest3) <-
+        if T.null name then Just ([], [], r)
+        else if name == "date" || name == "date2" then do
+          (date, _) <- scanSimpleDate (Just year) r
+          Just ([(name, val)], [(name, date)], rest2)
+        else Just ([(name, val)], [], rest2)
+      (moretags, moredates) <- scanPostingTags year (dropComma rest3)
+      Just (tags ++ moretags, dates ++ moredates)
 
--- | The parts of a simple posting recognised by scanSimplePosting: status, account name
--- (parent account and aliases applied, brackets removed), posting type, amount if any, and comment.
-data SimplePosting = SimplePosting !Status !AccountName !PostingRealness !(Maybe Amount) !Text
+-- | Drop a leading comma, if any (like optional (char ',')).
+dropComma :: Text -> Text
+dropComma t = fromMaybe t $ T.stripPrefix "," t
+
+-- | The parts of a simple transaction recognised by scanSimpleTransaction.
+data SimpleTransaction = SimpleTransaction {
+   stDate        :: !Day
+  ,stDate2       :: !(Maybe Day)
+  ,stStatus      :: !Status
+  ,stCode        :: !Text
+  ,stDescription :: !Text
+  ,stComment     :: !Text
+  ,stTags        :: ![Tag]
+  ,stPostings    :: ![SimplePosting]
+  }
+
+-- | The parts of a simple posting recognised by scanSimplePosting.
+data SimplePosting = SimplePosting {
+   spStatus   :: !Status
+  ,spAccount  :: !AccountName       -- ^ with the parent account and aliases applied, and brackets removed
+  ,spRealness :: !PostingRealness
+  ,spAmount   :: !(Maybe Amount)
+  ,spComment  :: !Text
+  ,spTags     :: ![Tag]
+  ,spDate     :: !(Maybe Day)       -- ^ from a date: tag, if any
+  ,spDate2    :: !(Maybe Day)       -- ^ from a date2: tag, if any
+  }
 
 -- | A fast path for the commonest kind of transaction: if the input begins with one, parse
 -- it, consuming its lines; otherwise consume nothing and return the reason for declining, so
@@ -1146,10 +1203,11 @@ data SimplePosting = SimplePosting !Status !AccountName !PostingRealness !(Maybe
 --
 -- - a date (YYYY-MM-DD, or with / or . separators; or MM-DD, using the default year), an
 --   optional secondary date, an optional * or ! status mark, an optional (code), a description,
---   and optionally a comment (same-line and/or on following indented lines) with no tags;
+--   and optionally a comment (same-line and/or on following indented lines), possibly with tags;
 -- - zero or more postings, each an indented line with an optional status mark, an account name
---   (possibly in parens or brackets), optionally an amount, and optionally a comment (as above)
---   with no tags or bracketed dates; no balance assertion or lot annotation;
+--   (possibly in parens or brackets), optionally an amount, and optionally a comment (as above),
+--   possibly with tags including date tags, but with no bracketed dates; no balance assertion
+--   or lot annotation;
 -- - amounts whose number is digits, with or without digit group marks, a decimal mark and decimal
 --   digits (as rawnumberp accepts; but no exponent), with an optional sign, an optional unquoted
 --   commodity symbol on either side, and an optional @ or @@ cost of the same form;
@@ -1165,22 +1223,24 @@ fasttransactionp = do
   s <- getInput
   case scanSimpleTransaction j s of
     Left reason -> return $ Left reason
-    Right (SimpleTransaction date mdate2 status code desc comment sps, consumed) -> do
+    Right (stxn, consumed) -> do
       startpos <- getSourcePos'
       -- share the account names, symbols and styles with identical earlier ones, as postingp does
-      ps <- mapM internPosting sps
+      ps <- mapM internPosting $ stPostings stxn
       -- consume the scanned text; megaparsec computes source positions from the offset on demand,
       -- so updating the input and the offset is all that is needed
       updateParserState $ \st -> st{stateInput = T.drop consumed s, stateOffset = stateOffset st + consumed}
       endpos <- getSourcePos'
-      -- the same value transactionp builds (no tags, since comments with tags decline);
-      -- the index and preceding comment are filled in later, as for any transaction
-      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date mdate2 status code desc comment [] ps
+      -- the same value transactionp builds; the index and preceding comment are filled in
+      -- later, as for any transaction
+      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) (stDate stxn) (stDate2 stxn) (stStatus stxn) (stCode stxn)
+        (stDescription stxn) (stComment stxn) (stTags stxn) ps
   where
-    internPosting (SimplePosting st acct ptype mamt comment) = do
-      acct' <- shareText acct
-      mamt' <- traverse internSimpleAmount mamt
-      return posting{pstatus=st, paccount=acct', pamount=maybe missingmixedamt mixedAmount mamt', pcomment=comment, preal=ptype}
+    internPosting sp = do
+      acct' <- shareText $ spAccount sp
+      mamt' <- traverse internSimpleAmount $ spAmount sp
+      return posting{pdate=spDate sp, pdate2=spDate2 sp, pstatus=spStatus sp, paccount=acct'
+                    ,pamount=maybe missingmixedamt mixedAmount mamt', pcomment=spComment sp, preal=spRealness sp, ptags=spTags sp}
 
 -- | Share a scanned amount's commodity symbol and style (and its cost amount's) with identical
 -- ones parsed earlier, as simpleamountp does, so that equal values point to one heap object.
@@ -1289,19 +1349,22 @@ scanSimpleTransaction j s0 = do
   let (desc, r7) = T.break (== ';') r6
       msameline = T.stripPrefix ";" r7
       (commentlines, s2, n2) = scanCommentLines s1
-  declineIf (any commentHasTag $ maybeToList msameline ++ commentlines) "transaction comment with tag"
-  (sps, n) <- scanPostings s2 (n1 + n2) []
-  Right (SimpleTransaction date mdate2 status code (T.strip desc) (commentText msameline commentlines) sps, n)
+      year = first3 $ toGregorian date  -- the default year for partial dates in the postings' date tags
+  (sps, n) <- scanPostings year s2 (n1 + n2) []
+  Right (SimpleTransaction{stDate=date, stDate2=mdate2, stStatus=status, stCode=code, stDescription=T.strip desc
+                          ,stComment=commentText msameline commentlines
+                          ,stTags=concatMap scanTransactionTags $ maybeToList msameline ++ commentlines
+                          ,stPostings=sps}, n)
   where
     parent  = concatAccountNames $ reverse $ jparseparentaccounts j
     als     = jparsealiases j
-    scanPostings s n acc = case scanSimpleLine s of
+    scanPostings year s n acc = case scanSimpleLine s of
       Just (line, s', k)
         | isIndented line -> do
             -- a posting line, and any following indented comment lines (its comment's continuation)
             let (commentlines, s'', k') = scanCommentLines s'
-            p <- scanSimplePosting j parent als line commentlines
-            scanPostings s'' (n + k + k') (p : acc)
+            p <- scanSimplePosting j year parent als line commentlines
+            scanPostings year s'' (n + k + k') (p : acc)
         | otherwise -> Right (reverse acc, n)
       -- the end of the text, or a line with a CR: in an indented (posting) line that declines,
       -- since the general parser would accept the posting; any other line just ends the postings
@@ -1394,11 +1457,12 @@ startsWithSpace = maybe False (isNonNewlineSpace . fst) . T.uncons
 -- same-line comment; and given the texts of its following comment lines (see scanCommentLines).
 -- Returns the status, the account name (with the parent account and aliases applied, as
 -- modifiedaccountnamep does, and virtual posting brackets removed, as postingp does), the
--- posting type, the amount if any, and the comment text. Declines on a comment with a tag or a
--- bracketed date (which postingcommentp would interpret), a balance assertion or assignment,
--- or anything else after the amount.
-scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> [Text] -> Either Text SimplePosting
-scanSimplePosting j parent als line commentlines = do
+-- posting type, the amount if any, the comment text, and the comment's tags and posting dates
+-- (the transaction's year is given for partial dates in those). Declines on a bracketed date
+-- in the comment (which postingcommentp would interpret), a date tag whose value is not a
+-- simple date, a balance assertion or assignment, or anything else after the amount.
+scanSimplePosting :: Journal -> Year -> AccountName -> [AccountAlias] -> Text -> [Text] -> Either Text SimplePosting
+scanSimplePosting j year parent als line commentlines = do
   -- an optional status mark, as statusp parses it, then spaces
   let (status, body) = case T.uncons $ T.dropWhile isNonNewlineSpace line of
         Just ('*', r) -> (Cleared, T.dropWhile isNonNewlineSpace r)
@@ -1422,13 +1486,17 @@ scanSimplePosting j parent als line commentlines = do
     Nothing       -> Right Nothing
     Just (';', r) -> Right (Just r)
     _             -> Left "unexpected text after the amount"
-  -- a tag or a bracketed date in the comment (which postingcommentp would interpret): decline
+  -- the comment's tags and posting dates, as postingcommentp parses them; a bracketed date
+  -- (which it would also interpret) declines, as does a date tag with an unusual value
   let comments = maybeToList msameline ++ commentlines
-  declineIf (any commentHasTag comments) "posting comment with tag"
   declineIf (any (T.any (== '[')) comments) "posting comment with bracketed date"
+  tagsanddates <- orDecline "unusual date tag value" $ mapM (scanPostingTags year) comments
+  let dates = concatMap snd tagsanddates
   -- as modifiedaccountnamep and postingp do (an alias error declines, to be reported there)
   full <- either (const $ Left "account alias error") Right $ accountNameApplyAliases als $ joinAccountNames parent name
-  Right $ SimplePosting status (textUnbracket full) (accountNamePostingType full) mamt (commentText msameline commentlines)
+  Right SimplePosting{spStatus=status, spAccount=textUnbracket full, spRealness=accountNamePostingType full, spAmount=mamt
+                     ,spComment=commentText msameline commentlines, spTags=concatMap fst tagsanddates
+                     ,spDate=lookup "date" dates, spDate2=lookup "date2" dates}
 
 -- | An account name as accountnamep parses it, and the text after it: one or more
 -- non-whitespace parts, separated by single spaces (a single tab also separates parts, and

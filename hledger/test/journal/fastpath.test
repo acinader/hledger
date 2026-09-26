@@ -49,9 +49,11 @@ Y 2024
     c  -1
     ; only on the line after a posting
 
-2024-01-11 declined: comment ; with a tag: value
-    a  1
-    b
+2024-01-11 tags  ; type:sale, note : no name, k1:v1,k2: v2 ,  k3:
+    ; second line tag:yes, time: 12:30
+    a  1  ; date:2024-01-15 extra, date2:1/16, :leading colon, k:v
+    ; cont:inued
+    b  -1
 
 2024-01-12 declined: balance assertion, digit groups, quoted symbol
     asserted  1,000.50 = 1,000.50
@@ -108,9 +110,11 @@ $ HLEDGER_FASTPATH=check hledger -f- print
     c                                             -1
     ; only on the line after a posting
 
-2024-01-11 declined: comment  ; with a tag: value
-    a                                              1
-    b
+2024-01-11 tags  ; type:sale, note : no name, k1:v1,k2: v2 ,  k3:
+    ; second line tag:yes, time: 12:30
+    a                                              1  ; date:2024-01-15 extra, date2:1/16, :leading colon, k:v
+    ; cont:inued
+    b                                             -1
 
 2024-01-12 declined: balance assertion, digit groups, quoted symbol
     asserted                                   1,000.50          = 1,000.50
@@ -288,23 +292,63 @@ $ HLEDGER_FASTPATH=check hledger -f- print
     a  1
     b
 
-2024-01-03 declined
+2024-01-03 accepted  ; with a tag:val
     a  1  ; tag:val
     b
 
 2024-01-04 declined
-    a  1  ; tag:val
-    b
-
-2024-01-05 declined
     c  1 = 1
     b
 
-2024-01-06 declined
-    a  1  ; [2024-01-07]
+2024-01-05 declined
+    a  1  ; [2024-01-06]
     b
 
 P 2024-01-01 A 1 B
 P 2024-01-02 "A B" 1 B
 $ hledger -f- --debug=1 stats 2>&1 | grep '^fast path'
-fast path was used for 33% of 6 transactions, 50% of 2 prices; declined: 2 posting comment with tag, 1 balance assertion or assignment, 1 posting comment with bracketed date, 1 quoted commodity symbol
+fast path was used for 60% of 5 transactions, 50% of 2 prices; declined: 1 balance assertion or assignment, 1 posting comment with bracketed date, 1 quoted commodity symbol
+
+# ** 7. Tags and posting dates in comments are parsed by the fast path; the register shows the posting dates.
+<
+2024-01-01 x  ; type:sale, note : no name, k1:v1,k2: v2 ,  k3:
+    ; second line tag:yes, time: 12:30
+    a  1  ; date:2024-01-05 extra, date2:1/6, :leading colon, k:v
+    ; cont:inued
+    b  -1  ; plain
+
+2024-01-02 y  ;tight:tag,a:b
+    c  1
+    ; date: 2024/2/3 spaced value
+    d
+$ HLEDGER_FASTPATH=check hledger -f- reg
+2024-01-01 x                    b                               -1            -1
+2024-01-02 y                    d                               -1            -2
+2024-01-05 x                    a                                1            -1
+2024-02-03 y                    c                                1             0
+
+# ** 8. The same, showing the tag values in parse order.
+<
+2024-01-01 x  ; type:sale, note : no name, k1:v1,k2: v2 ,  k3:
+    ; second line tag:yes, time: 12:30
+    a  1  ; date:2024-01-05 extra, date2:1/6, :leading colon, k:v
+    ; cont:inued
+    b  -1  ; plain
+
+2024-01-02 y  ;tight:tag,a:b
+    c  1
+    ; date: 2024/2/3 spaced value
+    d
+$ HLEDGER_FASTPATH=check hledger -f- tags --values --parsed
+sale
+v1
+v2
+yes
+12:30
+2024-01-05 extra
+1/6
+v
+inued
+tag
+b
+2024/2/3 spaced value
