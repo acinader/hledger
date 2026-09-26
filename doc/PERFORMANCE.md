@@ -21,17 +21,19 @@ In September 2026 hledger's main branch was optimised, and is now the fastest hl
 This is not released yet; it will be in the next hledger 2 preview.
 
 Here are some notable versions on the 100k journal, on a MacBook Pro M5 Pro in September 2026.
-Times are seconds for `hledger -f examples/100ktxns-1kaccts.journal COMMAND`, best of two runs
-(`quickbench -w hledger-1.25,hledger-1.40,hledger-1.52,hledger-1.99.4,hledger -n2`);
+Times are seconds for `hledger -f examples/100ktxns-1kaccts.journal COMMAND`, best of three runs
+(`quickbench -w hledger-1.25,hledger-1.40,hledger-1.52,hledger-1.99.4,hledger -n3`, all versions
+in one session, since times vary by a few percent between sessions, and the older versions'
+register times by 20% or more, as those runs use several GB of memory);
 txns/s is the throughput reported by `hledger stats`.
 
 | command    |  1.25 |  1.40 |  1.52 | 1.99.4 |  main |  since 1.25 |  since 1.52 | since 1.99.4 |
 |------------|------:|------:|------:|-------:|------:|------------:|------------:|-------------:|
-| stats      |  2.70 |  3.95 |  4.29 |   5.96 |  1.22 | 121% (2.2x) | 252% (3.5x) |  389% (4.9x) |
-| balance    |  2.68 |  3.92 |  4.06 |   5.80 |  1.40 |  91% (1.9x) | 190% (2.9x) |  314% (4.1x) |
-| print      |  3.24 |  4.27 |  4.42 |   6.32 |  2.01 |  61% (1.6x) | 120% (2.2x) |  214% (3.1x) |
-| register   | 71.99 | 30.22 | 20.73 |  19.02 | 13.62 | 429% (5.3x) |  52% (1.5x) |   40% (1.4x) |
-| **txns/s** |   37k |   25k | 23k * |  17k * |   85k | 130% (2.3x) | 270% (3.7x) |  400% (5.0x) |
+| stats      |  2.76 |  4.06 |  4.40 |   6.10 |  1.26 | 119% (2.2x) | 249% (3.5x) |  384% (4.8x) |
+| balance    |  2.65 |  4.00 |  4.08 |   5.89 |  1.40 |  89% (1.9x) | 191% (2.9x) |  321% (4.2x) |
+| print      |  3.33 |  4.60 |  4.61 |   6.55 |  2.09 |  59% (1.6x) | 121% (2.2x) |  213% (3.1x) |
+| register   | 63.03 | 16.81 | 17.79 |  21.19 | 14.32 | 340% (4.4x) |  24% (1.2x) |   48% (1.5x) |
+| **txns/s** |   36k |   24k | 23k * |  16k * |   80k | 122% (2.2x) | 248% (3.5x) |  400% (5.0x) |
 
 1.52 is the current hledger 1 release, and 1.99.4 the latest hledger 2 preview.
 So hledger main is 3-5x faster than 1.99.4, 2-3.5x faster than 1.52, and 1.6-2.2x faster than 1.25, the previous speed king
@@ -40,8 +42,9 @@ It also needs about half the memory: `balance` on this journal peaks at about 15
 
 These figures are for the synthetic journal, whose entries are all simple; real-world journals gain less.
 For example on a 21k-transaction real journal (87 files, comments or tags on most entries, several
-commodities, costs and lots), between 1.52 and main `stats` went from about 25k to 40k transactions
-per second (1.9x), `balance` 1.7x, `print` 1.5x and `register` 1.3x. The next sections explain why.
+commodities, costs and lots), `stats -I` takes 0.56s where 1.52 takes 1.06s (1.9x; `stats` reports
+about 24k and 42k transactions per second), `balance -I` 0.60s where 1.52 takes 1.05s (1.7x), and
+`print` and `register` gain 1.5x and 1.3x. The next sections explain why.
 
 \* hledger 1.51 to 1.99.4 measured `stats`' elapsed time before computing the statistics and writing
 the report, so the txns/s they show is too high: about 10% on a 1k-transaction journal, 13% at 10k
@@ -78,10 +81,10 @@ about 1.4s in total (1.35s in a normal run):
 
 | phase                                        | time  | allocation | notes                                                           |
 |----------------------------------------------|-------|------------|-----------------------------------------------------------------|
-| startup + read                               | 0.06s | 68 MB      |                                                                 |
-| parse                                        | 0.63s | 2.5 GB     | 45% of the run; the fast path handles every entry here          |
+| startup + read                               | 0.05s | 68 MB      |                                                                 |
+| parse                                        | 0.67s | 2.7 GB     | 47% of the run; the fast path handles every entry here          |
 | journalReverse                               | 0.03s | 12 MB      |                                                                 |
-| journalAddAccountTypes                       | 0.02s | 87 MB      |                                                                 |
+| journalAddAccountTypes                       | 0.02s | 33 MB      |                                                                 |
 | journalStyleAmounts                          | 0.08s | 218 MB     | rebuilds every posting to set display styles                    |
 | journalTagCostsAndEquityAndMaybeInferCosts   | 0.02s | 137 MB     | skipped per transaction unless conversion accounts are involved |
 | journalBalanceTransactionsAndDeferAssertions | 0.20s | 415 MB     | the second pass is skipped; includes a GC pause landing here    |
@@ -95,7 +98,7 @@ The live data is about 150 MB, but `+RTS -s` may report up to 240 MB maximum res
 off (`HLEDGER_FASTPATH=off`) they land differently and it reports 150 MB and 424 MB. Judge memory
 changes by a census's plateau or bytes copied, not by these samples.
 
-Register is much slower on this journal (15s) because it renders a running balance in 26
+Register is much slower on this journal (14s) because it renders a running balance in 26
 commodities for 200k lines; real journals have few commodities.
 A journal using lots adds work in the lot stages (about 0.4s for 1000 lot transactions added to the 100k journal).
 
@@ -107,7 +110,7 @@ with how much each entry uses beyond the basics, and reports that produce a lot 
 than the reading which precedes them.
 
 **Size.** Time is roughly proportional to the number of transactions and postings. hledger
-reads about 85k simple transactions per second, or about 30-40k per second of typical real-world
+reads about 80k simple transactions per second, or about 30-40k per second of typical real-world
 transactions (more postings, comments and tags, many included files). A 10k-transaction journal
 takes about 0.2s for a balance report, 100k about 1.4s, 1M about 14s. Memory is proportional too:
 about 1.5 KB of live data per simple transaction, 3 KB per real-world one, and the process uses
@@ -295,6 +298,12 @@ so `stack bench hledger` does nothing; to use it, enable it there.
   what extending it to more syntax would gain on a given journal. When adding journal syntax,
   either the fast path's guards must exclude it, or the fast path must handle it identically
   (and the check mode should be run).
+- Keep the fast path cheap for the commonest shapes: when it learned comments, it split off each
+  next line to see whether it was a comment line, and then split it again as a posting, and plain
+  transactions parsed 2% slower and allocated 6% more. Checking the line's first characters
+  instead, and making the line scanner's results strict (they were thunks, though every caller
+  forced them), recovered that. Refreshing the table above is what caught it: compare allocation
+  after every change, even one that adds nothing to the common path.
 - Costs and lot annotations after an amount were parsed with a permutation parser; its failed
   attempts at the other alternatives made a cost cost three times as much as a whole posting.
   Dispatching on the next character or two instead was 12% off the parse.
