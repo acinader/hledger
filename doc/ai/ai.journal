@@ -125,3 +125,6 @@ account ai
 
 2026-09-25 sm | misc (setup and cli fixes, discussion)
     (ai)                                         20 kt
+
+2026-09-26 sm | ghci vs compiled stats speed check
+    (ai)                                         9 kt
