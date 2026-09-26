@@ -94,6 +94,62 @@ Register is much slower on this journal (15s) because it renders a running balan
 commodities for 200k lines; real journals have few commodities.
 A journal using lots adds work in the lot stages (about 0.4s for 1000 lot transactions added to the 100k journal).
 
+## How a journal's shape affects performance
+
+Some guidelines for users, from measurements in 2026-09 (numbers are from a fast laptop; scale
+them for your machine). In short: run time grows with the number of postings and with how much
+each entry uses beyond the basics, and reports that produce a lot of output take longer than the
+reading which precedes them.
+
+**Size.** Time is roughly proportional to the number of transactions and postings. hledger
+reads about 85k simple transactions per second, or about 30k per second of typical real-world
+transactions (more postings, comments and tags, many included files). A 10k-transaction journal
+takes about 0.2s for a balance report, 100k about 1.4s, 1M about 14s. Memory is proportional too:
+about 1.5 KB of live data per simple transaction, 3 KB per real-world one, and the process uses
+about three times that. So a 100k-transaction journal needs about 0.5 GB, and a million
+transactions about 5 GB (or a third less with `+RTS -c -RTS`, see below).
+
+**Entry shape.** Parsing is usually about half of a run. Entries with just a date, description,
+account names and amounts (optionally with a cost) take a fast path in the parser and parse
+about a third faster than others. Entries with comments or tags, balance assertions, transaction
+codes, secondary dates, posting status marks, or lot annotations use the general parser. Long
+descriptions and account names cost little. Numbers with digit group marks and decimal marks
+cost the same as plain ones.
+
+**Directives.** Price (P) directives each cost about as much as a simple transaction to parse,
+so a large price history adds up: 100k of them add about 0.2s. Commodity and account
+directives are cheap. Balance assertions and assignments make the transaction balancer do a
+second pass, tracking every account's running balance in date order. Auto posting rules, periodic
+transaction rules (with --forecast), and lot tracking each add processing stages; a journal using
+lots pays for lot processing on every command, even ones that don't show lots (about 0.4s more
+on a 100k journal with 1000 lot transactions).
+
+**Accounts.** The number of accounts matters less than the number of postings. Thousands of
+accounts add a little to journal finalising (building the account tree, inferring account types)
+and to balance reports, which have more rows to build and show. Deep account names cost little.
+
+**Commodities.** Reports that render running balances or totals in many commodities are much
+slower, because each row shows every commodity: `register` on a 100k-transaction journal with 26
+commodities takes 14s, of which about 10s is rendering, while `balance` on the same journal takes 1.4s.
+Most real journals have few commodities and don't see this. Valuation (`-V`, `-X`, `--value`)
+adds price lookups per amount, more with a large price history.
+
+**Reports.** After reading, `stats` and `balance` are cheap. `print` spends about 0.9s per 100k
+transactions rendering. `register` is dominated by its output, so limiting it (a query, a period,
+`--depth`, or `-w`) helps directly. Reports over many periods or with many rows cost more to build.
+`hledger-ui` and `hledger-web` keep the journal loaded, so they pay the reading cost once and then
+per report.
+
+**Files.** Including many files is fine (87 files, 21k transactions: 0.7s); the per-file cost is
+small. hledger reads everything it is given, so keeping old years in separate files and reading
+only what a report needs (`-f`) reduces work proportionally. CSV and other formats add their
+conversion cost on top.
+
+**Memory options.** To cap memory use, run with `+RTS -M2G -RTS` (or another limit); hledger
+stops with an error if it needs more. To use about 20-40% less memory on large journals, at the
+cost of running 40-60% slower, add `+RTS -c -RTS` (the compacting garbage collector). See
+`+RTS -s -RTS` for memory and garbage collection statistics.
+
 ## Measuring
 
 ### quickbench
