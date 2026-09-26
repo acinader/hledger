@@ -1107,21 +1107,27 @@ orDecline :: Text -> Maybe a -> Either Text a
 orDecline reason = maybe (Left reason) Right
 {-# INLINE orDecline #-}
 
--- | The reason for declining a transaction or posting line which has a comment:
--- says whether the comment seems to contain a tag (a colon), since supporting plain
--- comments in the fast path would be easier than supporting tags.
-commentDeclineReason :: Text -> Text -> Text
-commentDeclineReason what line
-  | T.any (== ':') (T.drop 1 $ T.dropWhile (/= ';') line) = what <> " comment with tag"
-  | otherwise = what <> " comment"
+-- | A following comment's text as followingcommentpWith builds it, from the same-line comment's
+-- text (after the semicolon) if there was one, and any following comment lines' texts: each
+-- stripped and newline-terminated, with an empty first line when there was no same-line comment
+-- but there are following lines (so that the comment is not rendered as a same-line one).
+commentText :: Maybe Text -> [Text] -> Text
+commentText msameline nextlines = case (msameline, nextlines) of
+  (Nothing, []) -> ""
+  _ -> T.unlines $ map T.strip $ fromMaybe "" msameline : nextlines
+
+-- | Could this comment text contain a tag ? True if it has a colon (any colon makes
+-- commentlinetagsp parse a tag). Such comments decline, for now.
+commentHasTag :: Text -> Bool
+commentHasTag = T.any (== ':')
 
 -- | The parts of a simple transaction recognised by scanSimpleTransaction: date, secondary
--- date, status, code, description, and postings.
-data SimpleTransaction = SimpleTransaction !Day !(Maybe Day) !Status !Text !Text ![SimplePosting]
+-- date, status, code, description, comment, and postings.
+data SimpleTransaction = SimpleTransaction !Day !(Maybe Day) !Status !Text !Text !Text ![SimplePosting]
 
 -- | The parts of a simple posting recognised by scanSimplePosting: status, account name
--- (parent account and aliases applied, brackets removed), posting type, and amount if any.
-data SimplePosting = SimplePosting !Status !AccountName !PostingRealness !(Maybe Amount)
+-- (parent account and aliases applied, brackets removed), posting type, amount if any, and comment.
+data SimplePosting = SimplePosting !Status !AccountName !PostingRealness !(Maybe Amount) !Text
 
 -- | A fast path for the commonest kind of transaction: if the input begins with one, parse
 -- it, consuming its lines; otherwise consume nothing and return the reason for declining, so
@@ -1130,11 +1136,11 @@ data SimplePosting = SimplePosting !Status !AccountName !PostingRealness !(Maybe
 -- (which allocate heavily per token). A simple transaction has:
 --
 -- - a date (YYYY-MM-DD, or with / or . separators; or MM-DD, using the default year), an
---   optional secondary date, an optional * or ! status mark, an optional (code), and a
---   description with no comment;
+--   optional secondary date, an optional * or ! status mark, an optional (code), a description,
+--   and optionally a comment (same-line and/or on following indented lines) with no tags;
 -- - zero or more postings, each an indented line with an optional status mark, an account name
---   (possibly in parens or brackets) and optionally an amount; no comment, balance assertion or
---   lot annotation;
+--   (possibly in parens or brackets), optionally an amount, and optionally a comment (as above)
+--   with no tags or bracketed dates; no balance assertion or lot annotation;
 -- - amounts whose number is digits, with or without digit group marks, a decimal mark and decimal
 --   digits (as rawnumberp accepts; but no exponent), with an optional sign, an optional unquoted
 --   commodity symbol on either side, and an optional @ or @@ cost of the same form;
@@ -1150,7 +1156,7 @@ fasttransactionp = do
   s <- getInput
   case scanSimpleTransaction j s of
     Left reason -> return $ Left reason
-    Right (SimpleTransaction date mdate2 status code desc sps, consumed) -> do
+    Right (SimpleTransaction date mdate2 status code desc comment sps, consumed) -> do
       startpos <- getSourcePos'
       -- share the account names, symbols and styles with identical earlier ones, as postingp does
       ps <- mapM internPosting sps
@@ -1158,14 +1164,14 @@ fasttransactionp = do
       -- so updating the input and the offset is all that is needed
       updateParserState $ \st -> st{stateInput = T.drop consumed s, stateOffset = stateOffset st + consumed}
       endpos <- getSourcePos'
-      -- the same value transactionp builds: no comment or tags;
+      -- the same value transactionp builds (no tags, since comments with tags decline);
       -- the index and preceding comment are filled in later, as for any transaction
-      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date mdate2 status code desc "" [] ps
+      return $ Right $ txnTieKnot $ Transaction 0 "" (startpos, endpos) date mdate2 status code desc comment [] ps
   where
-    internPosting (SimplePosting st acct ptype mamt) = do
+    internPosting (SimplePosting st acct ptype mamt comment) = do
       acct' <- shareText acct
       mamt' <- traverse internSimpleAmount mamt
-      return posting{pstatus=st, paccount=acct', pamount=maybe missingmixedamt mixedAmount mamt', preal=ptype}
+      return posting{pstatus=st, paccount=acct', pamount=maybe missingmixedamt mixedAmount mamt', pcomment=comment, preal=ptype}
 
 -- | Share a scanned amount's commodity symbol and style (and its cost amount's) with identical
 -- ones parsed earlier, as simpleamountp does, so that equal values point to one heap object.
@@ -1232,11 +1238,12 @@ scanSimplePrice j s = do
 -- | Recognise a simple transaction (see fasttransactionp) at the start of the text, returning
 -- its parts and the number of characters consumed (through the newline of its last line).
 -- The first line is scanned as transactionp parses it: a date, an optional secondary date,
--- then whitespace or the end of the line, an optional status mark, an optional code, and the
--- description (whitespace-stripped). Then, as postingsp does, each following indented line is
--- taken as a posting, until a line that is not indented, or the end of the text. Since a
--- decline must consume nothing, one posting the scanner does not handle declines the whole
--- transaction.
+-- then whitespace or the end of the line, an optional status mark, an optional code, the
+-- description (whitespace-stripped), and an optional comment; then any following indented
+-- comment lines continue the comment (as transactioncommentp parses them). Then, as postingsp
+-- does, each following indented line is taken as a posting (with its own following comment
+-- lines), until a line that is not indented, or the end of the text. Since a decline must
+-- consume nothing, one posting the scanner does not handle declines the whole transaction.
 scanSimpleTransaction :: Journal -> Text -> Either Text (SimpleTransaction, Int)
 scanSimpleTransaction j s0 = do
   (line1, s1, n1) <- orDecline "CR line ending" $ scanSimpleLine s0  -- (the text is not empty: it begins with a digit)
@@ -1268,18 +1275,24 @@ scanSimpleTransaction j s0 = do
       r'' <- orDecline "unclosed transaction code" $ T.stripPrefix ")" r'
       Right (c, r'')
     _ -> Right ("", r5)
-  -- a comment (which transactioncommentp would parse, possibly with tags): decline
-  declineIf (T.any (== ';') r6) $ commentDeclineReason "transaction" r6
-  (sps, n) <- scanPostings s1 n1 []
-  Right (SimpleTransaction date mdate2 status code (T.strip r6) sps, n)
+  -- the description ends at a semicolon, which begins a same-line comment; following indented
+  -- comment lines continue the comment (transactioncommentp); a tag in any of it: decline
+  let (desc, r7) = T.break (== ';') r6
+      msameline = T.stripPrefix ";" r7
+      (commentlines, s2, n2) = scanCommentLines s1
+  declineIf (any commentHasTag $ maybeToList msameline ++ commentlines) "transaction comment with tag"
+  (sps, n) <- scanPostings s2 (n1 + n2) []
+  Right (SimpleTransaction date mdate2 status code (T.strip desc) (commentText msameline commentlines) sps, n)
   where
     parent  = concatAccountNames $ reverse $ jparseparentaccounts j
     als     = jparsealiases j
     scanPostings s n acc = case scanSimpleLine s of
       Just (line, s', k)
         | isIndented line -> do
-            p <- scanSimplePosting j parent als line
-            scanPostings s' (n + k) (p : acc)
+            -- a posting line, and any following indented comment lines (its comment's continuation)
+            let (commentlines, s'', k') = scanCommentLines s'
+            p <- scanSimplePosting j parent als line commentlines
+            scanPostings s'' (n + k + k') (p : acc)
         | otherwise -> Right (reverse acc, n)
       -- the end of the text, or a line with a CR: in an indented (posting) line that declines,
       -- since the general parser would accept the posting; any other line just ends the postings
@@ -1303,6 +1316,16 @@ scanSimpleLine s
       in if T.any (== '\r') line
          then Nothing
          else Just (line, T.drop 1 rest, T.length line + (if T.null rest then 0 else 1))
+
+-- | Consume any following comment lines (indented lines beginning with a semicolon, as
+-- followingcommentpWith recognises them), returning their texts after the semicolon, the text
+-- after them, and the number of characters consumed.
+scanCommentLines :: Text -> ([Text], Text, Int)
+scanCommentLines = go [] 0
+  where
+    go acc n s = case scanSimpleLine s of
+      Just (line, s', k) | startsWithSpace line, Just r <- T.stripPrefix ";" (T.dropWhile isNonNewlineSpace line) -> go (r : acc) (n + k) s'
+      _ -> (reverse acc, s, n)
 
 -- | A date as datep parses it, given the default year, and the text after it. A full date has a
 -- four-digit year (datep also allows longer ones; those decline), a - / or . separator, a one-
@@ -1358,15 +1381,15 @@ startsWithSpace :: Text -> Bool
 startsWithSpace = maybe False (isNonNewlineSpace . fst) . T.uncons
 
 -- | A simple posting line (see fasttransactionp), scanned as postingp parses it: indentation,
--- an optional status mark, the account name, and optionally an amount with cost; returning the
--- status, the account name (with the parent account and aliases applied, as modifiedaccountnamep
--- does, and virtual posting brackets removed, as postingp does), the posting type, and the
--- amount if any. Declines on a comment (which could hold tags or dates), a balance assertion or
--- assignment, or anything else after the amount.
-scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> Either Text SimplePosting
-scanSimplePosting j parent als line = do
-  -- a comment anywhere (possibly with tags): decline
-  declineIf (T.any (== ';') line) $ commentDeclineReason "posting" line
+-- an optional status mark, the account name, optionally an amount with cost, and optionally a
+-- same-line comment; and given the texts of its following comment lines (see scanCommentLines).
+-- Returns the status, the account name (with the parent account and aliases applied, as
+-- modifiedaccountnamep does, and virtual posting brackets removed, as postingp does), the
+-- posting type, the amount if any, and the comment text. Declines on a comment with a tag or a
+-- bracketed date (which postingcommentp would interpret), a balance assertion or assignment,
+-- or anything else after the amount.
+scanSimplePosting :: Journal -> AccountName -> [AccountAlias] -> Text -> [Text] -> Either Text SimplePosting
+scanSimplePosting j parent als line commentlines = do
   -- an optional status mark, as statusp parses it, then spaces
   let (status, body) = case T.uncons $ T.dropWhile isNonNewlineSpace line of
         Just ('*', r) -> (Cleared, T.dropWhile isNonNewlineSpace r)
@@ -1380,16 +1403,23 @@ scanSimplePosting j parent als line = do
   -- a balance assignment (= AMT with no amount before it): decline
   declineIf (T.isPrefixOf "=" r2) "balance assertion or assignment"
   (mamt, r3) <-
-    if T.null r2
+    if T.null r2 || T.isPrefixOf ";" r2
     then Right (Nothing, r2)
     else do (a, r) <- scanSimpleAmountAndCost j r2; Right (Just a, r)
-  -- anything else on the line (a balance assertion, eg): decline
+  -- then a balance assertion: decline; or an optional same-line comment; anything else is an error
   let r4 = T.dropWhile isNonNewlineSpace r3
   declineIf (T.isPrefixOf "=" r4) "balance assertion or assignment"
-  declineIf (not $ T.null r4) "unexpected text after the amount"
+  msameline <- case T.uncons r4 of
+    Nothing       -> Right Nothing
+    Just (';', r) -> Right (Just r)
+    _             -> Left "unexpected text after the amount"
+  -- a tag or a bracketed date in the comment (which postingcommentp would interpret): decline
+  let comments = maybeToList msameline ++ commentlines
+  declineIf (any commentHasTag comments) "posting comment with tag"
+  declineIf (any (T.any (== '[')) comments) "posting comment with bracketed date"
   -- as modifiedaccountnamep and postingp do (an alias error declines, to be reported there)
   full <- either (const $ Left "account alias error") Right $ accountNameApplyAliases als $ joinAccountNames parent name
-  Right $ SimplePosting status (textUnbracket full) (accountNamePostingType full) mamt
+  Right $ SimplePosting status (textUnbracket full) (accountNamePostingType full) mamt (commentText msameline commentlines)
 
 -- | An account name as accountnamep parses it, and the text after it: one or more
 -- non-whitespace parts, separated by single spaces (a single tab also separates parts, and

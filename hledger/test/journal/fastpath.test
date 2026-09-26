@@ -41,11 +41,19 @@ Y 2024
     a  1
     b
 
-2024-01-10 declined: comment ; and tags
-    a  1  ; tag: value
+2024-01-10 plain comments  ; on the transaction
+    ; and continued on the next line
+    a  1  ; on a posting
+    ; continued
+    b  ; on a posting with no amount
+    c  -1
+    ; only on the line after a posting
+
+2024-01-11 declined: comment ; with a tag: value
+    a  1
     b
 
-2024-01-11 declined: balance assertion, digit groups, quoted symbol
+2024-01-12 declined: balance assertion, digit groups, quoted symbol
     asserted  1,000.50 = 1,000.50
     b  1 "two words"
     c
@@ -92,11 +100,19 @@ $ HLEDGER_FASTPATH=check hledger -f- print
     a                                              1
     b
 
-2024-01-10 declined: comment  ; and tags
-    a                                              1  ; tag: value
+2024-01-10 plain comments  ; on the transaction
+    ; and continued on the next line
+    a                                              1  ; on a posting
+    ; continued
+    b                                                 ; on a posting with no amount
+    c                                             -1
+    ; only on the line after a posting
+
+2024-01-11 declined: comment  ; with a tag: value
+    a                                              1
     b
 
-2024-01-11 declined: balance assertion, digit groups, quoted symbol
+2024-01-12 declined: balance assertion, digit groups, quoted symbol
     asserted                                   1,000.50          = 1,000.50
     b                                              1 "two words"
     c
@@ -268,12 +284,12 @@ $ HLEDGER_FASTPATH=check hledger -f- print
     a  1
     b
 
-2024-01-02 (code) accepted
+2024-01-02 (code) accepted  ; with a plain comment
     a  1
     b
 
-2024-01-03 declined  ; comment
-    a  1
+2024-01-03 declined
+    a  1  ; tag:val
     b
 
 2024-01-04 declined
@@ -281,14 +297,14 @@ $ HLEDGER_FASTPATH=check hledger -f- print
     b
 
 2024-01-05 declined
-    a  1  ; tag:val
+    c  1 = 1
     b
 
 2024-01-06 declined
-    c  1 = 1
+    a  1  ; [2024-01-07]
     b
 
 P 2024-01-01 A 1 B
 P 2024-01-02 "A B" 1 B
 $ hledger -f- --debug=1 stats 2>&1 | grep '^fast path'
-fast path was used for 33% of 6 transactions, 50% of 2 prices; declined: 2 posting comment with tag, 1 balance assertion or assignment, 1 quoted commodity symbol, 1 transaction comment
+fast path was used for 33% of 6 transactions, 50% of 2 prices; declined: 2 posting comment with tag, 1 balance assertion or assignment, 1 posting comment with bracketed date, 1 quoted commodity symbol
