@@ -430,7 +430,9 @@ setupJournal meconf = do
   case (ef, ej) of
     (Left err, _) -> p N $ trim err
     (Right f, Left err) -> do
-      p N (f <> ":\n" <> trim err)
+      -- show a missing file compactly, other read errors in full
+      exists <- doesFileExist f
+      p N $ if exists then f <> ":\n" <> trim err else f <> " (not found)"
       journalFilesystemCanAppend f
     (Right f, Right j@Journal{..}) -> do
       p Y f
