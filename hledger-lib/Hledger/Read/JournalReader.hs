@@ -1059,9 +1059,9 @@ data SimpleTransaction = SimpleTransaction !Day !Status !Text ![(AccountName, Po
 -- - zero or more postings, each an indented line with an account name (possibly in parens or
 --   brackets) and optionally an amount; no status mark, comment, balance assertion or lot
 --   annotation;
--- - amounts whose number is DIGITS, or DIGITS then a decimal mark (. or ,) then DIGITS (no digit
---   group marks, exponent, or leading or trailing mark), with an optional sign, an optional
---   unquoted commodity symbol on either side, and an optional @ or @@ cost of the same form;
+-- - amounts whose number is digits, with or without digit group marks, a decimal mark and decimal
+--   digits (as rawnumberp accepts; but no exponent), with an optional sign, an optional unquoted
+--   commodity symbol on either side, and an optional @ or @@ cost of the same form;
 --   and when there is no symbol, no default commodity directive in effect;
 -- - no CR characters.
 --
@@ -1295,24 +1295,43 @@ scanSign t = case T.uncons t of
 scanSpaces :: Text -> (Bool, Text)
 scanSpaces t = (maybe False (isNonNewlineSpace . fst) $ T.uncons t, T.dropWhile isNonNewlineSpace t)
 
--- | A number of the form DIGITS, or DIGITS then a decimal mark (. or ,) then DIGITS, as
--- rawnumberp would classify it (the latter is ambiguous: the mark might be a digit group
--- mark); and the text after it. Numbers with more marks, a leading or trailing mark, an
--- exponent, or followed by a space and a digit, decline.
+-- | A number, classified as rawnumberp would: digits, possibly in groups separated by one
+-- repeated digit group mark (which can be a space), possibly with a decimal mark and decimal
+-- digits, or with a leading or trailing decimal mark; and the text after it. As there, a number
+-- with a single mark between digits is ambiguous (the mark might be a decimal or a digit group
+-- mark), left for interpretRawNumber to resolve. A number followed by an exponent, by another
+-- decimal mark, or by a space and a digit, declines (the last two are parse errors).
 scanSimpleNumber :: Text -> Maybe (Either AmbiguousNumber RawNumber, Text)
-scanSimpleNumber t = do
-  let (ds, r) = T.span isDigit t
-  guard $ not $ T.null ds
-  case T.uncons r of
-    Just (c, r') | isDecimalMark c -> do
-      let (ds2, r'') = T.span isDigit r'
-      guard $ not $ T.null ds2
-      guard $ numberEnds r''
-      Just (Left $ AmbiguousNumber (digitGroup ds) c (digitGroup ds2), r'')
+scanSimpleNumber t0 = do
+  (raw, r) <- case T.uncons t0 of
+    -- a leading decimal mark, then digits: .5
+    Just (c, t1) | isDecimalMark c -> do
+      (grp, r) <- digits t1
+      Just (Right $ NoSeparators mempty (Just (c, grp)), r)
     _ -> do
-      guard $ numberEnds r
-      Just (Right $ NoSeparators (digitGroup ds) Nothing, r)
+      (grp1, r1) <- digits t0
+      case T.uncons r1 of
+        -- a digit group mark (which might be a decimal mark), then a digit: more digit groups
+        Just (sep, r2) | isDigitSeparatorChar sep, maybe False (isDigit . fst) (T.uncons r2) -> do
+          (grp2, r3) <- digits r2
+          let (grps, r4) = moreGroups sep r3
+          case T.uncons r4 of
+            -- then a decimal mark (not the digit group mark), and maybe decimal digits
+            Just (dm, r5) | isDecimalMark dm, dm /= sep ->
+              let (dgrp, r6) = fromMaybe (mempty, r5) $ digits r5
+              in Just (Right $ WithSeparators sep (grp1 : grp2 : grps) (Just (dm, dgrp)), r6)
+            _ | null grps && isDecimalMark sep -> Just (Left $ AmbiguousNumber grp1 sep grp2, r4)
+              | otherwise -> Just (Right $ WithSeparators sep (grp1 : grp2 : grps) Nothing, r4)
+        -- a trailing decimal mark: 1.
+        Just (dm, r2) | isDecimalMark dm -> Just (Right $ NoSeparators grp1 (Just (dm, mempty)), r2)
+        _ -> Just (Right $ NoSeparators grp1 Nothing, r1)
+  guard $ numberEnds r
+  Just (raw, r)
   where
+    digits t = let (ds, r) = T.span isDigit t in if T.null ds then Nothing else Just (digitGroup ds, r)
+    moreGroups sep t = case T.uncons t of
+      Just (c, t') | c == sep, Just (g, t'') <- digits t' -> let (gs, r) = moreGroups sep t'' in (g : gs, r)
+      _ -> ([], t)
     digitGroup ds = DigitGrp (fromIntegral $ T.length ds) (readDecimal ds)
     -- the number must not be followed by another decimal mark, an exponent, or a digit group
     -- mark (which can be a space) and a digit; those are errors, or more complex numbers

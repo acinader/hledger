@@ -22,7 +22,7 @@ Expected gains are for the 100k balance run; "general" means every command pays 
    once. print's own rendering is about 0.9s at 100k, and is shared by exports, hledger-ui and
    hledger-web: profile it.
 2. Parser fast path, further: measure its hit rate on real journals (`HLEDGER_FASTPATH=off` for
-   comparison); entries with a same-line comment or tags, or digit-grouped numbers, decline now
+   comparison); entries with a same-line comment or tags decline now
    and could be accepted with more scanning code. The remaining 0.63s parse is now roughly half
    fast path (scanning, building and interning) and half declined entries plus the per-item
    dispatch, blank lines and item recording.

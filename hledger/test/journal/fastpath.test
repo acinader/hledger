@@ -209,3 +209,44 @@ $ HLEDGER_FASTPATH=check hledger -f- register -V -e 2024-01-05
                                                                            0.5 X
                                 (d)                           1.00       3,0 USD
                                                                            0.5 X
+
+# ** 5. Numbers with digit group marks (including spaces), decimal marks, and leading or trailing marks; exponents decline.
+<
+; Numbers with digit group marks, decimal marks, and leading or trailing marks.
+commodity 1.000,00 EUR
+
+2024-01-01
+    a    $1,234.56
+    b    1.234,56 EUR
+    c    1,000,000 X
+    d    1 234,5 EUR
+    e    1.000 EUR
+    f    1,000. Y
+    g    .5 Z
+    h    1. Z
+    i    1'000'000.25 CHF
+    j    1_000 W
+    k
+
+2024-01-02 declined: exponents
+    a    1e3 X
+    b
+$ HLEDGER_FASTPATH=check hledger -f- print
+2024-01-01
+    a                                         $1,234.56
+    b                                          1.234,56 EUR
+    c                                      1,000,000. X
+    d                                          1.234,5 EUR
+    e                                          1.000, EUR
+    f                                          1,000. Y
+    g                                              0.5 Z
+    h                                              1 Z
+    i                                      1'000'000.25 CHF
+    j                                          1_000. W
+    k
+
+2024-01-02 declined: exponents
+    a                                          1,000. X
+    b
+
+>=
