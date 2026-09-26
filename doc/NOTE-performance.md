@@ -11,10 +11,12 @@ Done in 2026-09: the megaparsec regression (fixed upstream in megaparsec 9.8.3, 
 [megaparsec#613](https://github.com/mrkkrp/megaparsec/pull/613); pinned in all stack configs);
 the residency reductions (strict parser accumulators, shared amount styles, account names and
 commodity symbols: 2.6 -> 1.5 KB per transaction); cheaper cost annotation parsing; and the
-parser fast path for simple transactions and prices (parse 0.92 -> 0.63s, allocation halved);
-and, prompted by a real 21k-transaction journal where finalising was 40% of the run, a one-pass
-account tree builder, cheaper account type inference, and tag propagation that leaves untagged
-postings alone.
+parser fast path for simple transactions and prices (parse 0.92 -> 0.63s, allocation halved),
+later extended to codes, secondary and partial dates, posting status marks, times of day in
+price directives, comments and tags (a real 21k-transaction journal went from 40% to 85% of
+entries on the fast path; `--debug=1` reports the share and the reasons for the rest);
+and, prompted by that journal, where finalising was 40% of the run, a one-pass account tree
+builder, cheaper account type inference, and tag propagation that leaves untagged postings alone.
 
 ## Remaining ideas, ranked
 
@@ -24,11 +26,15 @@ Expected gains are for the 100k balance run; "general" means every command pays 
    (HashMap update and period data insertion per posting), and it computes amount widths more than
    once. print's own rendering is about 0.9s at 100k, and is shared by exports, hledger-ui and
    hledger-web: profile it.
-2. Parser fast path, further: measure its hit rate on real journals (`HLEDGER_FASTPATH=off` for
-   comparison); entries with a same-line comment or tags decline now
-   and could be accepted with more scanning code. The remaining 0.63s parse is now roughly half
-   fast path (scanning, building and interning) and half declined entries plus the per-item
-   dispatch, blank lines and item recording.
+2. Parser fast path, balance assertions: the one common syntax it still declines (14% of entries
+   in the real journal above; everything in a journal that asserts every posting). Decided not
+   worth the code for now (2026-09-26); it would matter for assertion-heavy journals, where an
+   assertion costs about 3us in the general parser against 0.5us for a fast-path amount, so up to
+   20% of a run. About forty lines: mirror balanceassertionp (=, ==, =*, then the existing
+   amount-with-cost scanner), compute the = character's source position for the BalanceAssertion
+   (line offset within the entry plus column; decline when a tab precedes it, to avoid
+   megaparsec's tab-stop rule), and intern the asserted amount. Check mode covers the positions.
+   Also still declined: bracketed dates in posting comments, symbol-less amounts under a D directive.
 3. Remaining lot overhead on lot journals, ~0.36s: calculateLots still sorts, rebuilds and re-ties
    every transaction (0.135s); basis-from-account-name and transacted-cost inference search every
    account name (0.07s); commodity tags, method coherence.
