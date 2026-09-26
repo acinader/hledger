@@ -38,6 +38,11 @@ So hledger main is 3-5x faster than 1.99.4, 2-3.5x faster than 1.52, and 1.6-2.2
 (the more so the less output a command produces).
 It also needs about half the memory: `balance` on this journal peaks at about 150 MB of live data (about 425 MB in use by the runtime), where 1.52 needs 284 MB (808 MB).
 
+These figures are for the synthetic journal, whose entries are all simple; real-world journals gain less.
+For example on a 21k-transaction real journal (87 files, comments or tags on most entries, several
+commodities, costs and lots), between 1.52 and main `stats` went from about 25k to 40k transactions
+per second (1.9x), `balance` 1.7x, `print` 1.5x and `register` 1.3x. The next sections explain why.
+
 \* hledger 1.51 to 1.99.4 measured `stats`' elapsed time before computing the statistics and writing
 the report, so the txns/s they show is too high: about 10% on a 1k-transaction journal, 13% at 10k
 and 30% at 100k. These two figures are corrected (transactions divided by the whole run time).
@@ -96,13 +101,13 @@ A journal using lots adds work in the lot stages (about 0.4s for 1000 lot transa
 
 ## How a journal's shape affects performance
 
-Some guidelines for users, from measurements in 2026-09 (numbers are from a fast laptop; scale
-them for your machine). In short: run time grows with the number of postings and with how much
-each entry uses beyond the basics, and reports that produce a lot of output take longer than the
-reading which precedes them.
+Some observations, using the 2026-09 m5 measurements above to make things concrete; scale these
+numbers appropriately for your machine). In short: run time grows with the number of postings and 
+with how much each entry uses beyond the basics, and reports that produce a lot of output take longer
+than the reading which precedes them.
 
 **Size.** Time is roughly proportional to the number of transactions and postings. hledger
-reads about 85k simple transactions per second, or about 30k per second of typical real-world
+reads about 85k simple transactions per second, or about 30-40k per second of typical real-world
 transactions (more postings, comments and tags, many included files). A 10k-transaction journal
 takes about 0.2s for a balance report, 100k about 1.4s, 1M about 14s. Memory is proportional too:
 about 1.5 KB of live data per simple transaction, 3 KB per real-world one, and the process uses
