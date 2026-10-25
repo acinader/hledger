@@ -27,8 +27,12 @@
             <a href="@?{(JournalR, dayParams torig)}##{transactionFrag torig}"
                title=_{HMsg "Show this entry and the other journal entries on its date"}>
               #{show (tdate tacct)}
+          $# The description links where the date does. It has no title,
+          $# which would show in place of the row's entry tooltip.
           <td .description>
-            #{textElideRight 30 (tdescription tacct)}
+            $if not (T.null (tdescription tacct))
+              <a href="@?{(JournalR, dayParams torig)}##{transactionFrag torig}">
+                #{textElideRight 30 (tdescription tacct)}
           <td .account>
             $forall (Posting { paccount = acc }, (summName,comma)) <- otherTransAccounts torig
               <a href="@?{acctlink acc torig}##{transactionFrag torig}" title="#{acc}">

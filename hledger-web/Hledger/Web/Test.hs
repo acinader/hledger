@@ -776,7 +776,7 @@ hledgerWebTest = do
       bodyNotContains "Years:"
       get RegisterR
       statusIs 200
-      bodyContains "lunch</td>"
+      bodyContains "lunch</a>"
       bodyNotContains "Showing "
       bodyNotContains "Years:"
 
@@ -1307,7 +1307,7 @@ hledgerWebTest = do
       bodyContains ("id=\"" ++ frag "lunch" ++ "\"")
       bodyNotContains ("id=\"" ++ frag "pay" ++ "\"")
 
-    yit "gives register rows the journal's entry ids, and links dates to the entry on its day" $ do
+    yit "gives register rows the journal's entry ids, and links dates and descriptions to the entry on its day" $ do
       request $ do
         setMethod "GET"
         setUrl RegisterR
@@ -1315,6 +1315,7 @@ hledgerWebTest = do
       statusIs 200
       bodyContains ("<tr id=\"" ++ frag "lunch" ++ "\"")
       bodyContains ("href=\"" ++ base ++ "/journal?q=date%3A2025-02-05#" ++ frag "lunch" ++ "\" title=\"Show this entry and the other journal entries on its date\">")
+      bodyContains ("<td class=\"description\"><a href=\"" ++ base ++ "/journal?q=date%3A2025-02-05#" ++ frag "lunch" ++ "\">lunch</a>")
       bodyContains ("href=\"" ++ base ++ "/register?account=expenses%3Afood&amp;txn=" ++ tix "lunch" ++ "#" ++ frag "lunch" ++ "\" title=\"expenses:food\">")
       -- the chart's points link to the rows, its styles are linked, and its base link is the register's
       bodyContains ("<a href=\"#" ++ frag "lunch" ++ "\"")
