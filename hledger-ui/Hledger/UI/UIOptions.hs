@@ -123,6 +123,16 @@ rawOptsToUIOpts rawopts = do
     checkTheme t = let t' = if t == "default" then "light" else t  -- "default" is a deprecated alias for "light"
                    in if t' `M.member` themes then t' else usageError $ "invalid theme name: " ++ t
 
+-- | The options to load (or reload) the journal with: lot detail kept, and
+-- no conversion to cost basis. The UI collapses lots and converts to cost
+-- when it derives the display journal for the current options
+-- (uiDisplayJournal), so that the L and B keys can turn either off again.
+uiLoadOpts :: CliOpts -> CliOpts
+uiLoadOpts copts@CliOpts{rawopts_=ro, reportspec_=rspec@ReportSpec{_rsReportOpts=ropts}} =
+  copts{ rawopts_    = setboolopt "lots" ro
+       , reportspec_ = rspec{_rsReportOpts = ropts{conversionop_ = Nothing}}
+       }
+
 -- XXX some refactoring seems due
 getHledgerUIOpts :: IO UIOpts
 --getHledgerUIOpts = processArgs uimode >>= return >>= rawOptsToUIOpts

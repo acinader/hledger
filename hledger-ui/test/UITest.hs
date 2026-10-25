@@ -148,6 +148,15 @@ tests = testGroup "hledger-ui"
         -- the 5 AAA left cost $100 (the sale's $30 price would give $-150)
         assertBool ("the broker should show its lots' cost, but shows: " <> show brokerLines)
           (any (T.isInfixOf "$100") brokerLines)
+  , testCase "B turns cost off after starting with -B and reloading" $
+      withJournalFile lotSaleFixture $ \path -> do
+        uopts <- withDay (fromGregorian 2026 6 1) <$> uiOptsForArgs ["-f", path, "--all", "-B"]
+        j <- readJournalFile' path
+        --                                 g(reload) B(cost off)
+        (_, frames) <- driveUI uopts j [key 'g', key 'B']
+        let brokerLines = filter (T.isInfixOf "broker") $ renderText region (last frames)
+        assertBool ("the broker should show its amount as recorded, but shows: " <> show brokerLines)
+          (any (T.isInfixOf "5 AAA") brokerLines)
   , testCase "the last screen-selecting flag wins" $
       withJournalFile fixture $ \path -> do
         j <- readJournalFile' path

@@ -116,9 +116,10 @@ hledgerUiMain = handleExit $ withGhcDebug' $ withProgName "hledger-ui.log" $ do 
   -- always generate forecasted periodic transactions; their visibility will be toggled by the UI.
   let copts' = copts{inputopts_=iopts{forecast_=forecast_ iopts <|> Just nulldatespan}}
 
-  -- always load the journal with full lot detail retained; the UI collapses it for display
-  -- (toggled by the L key), so the uncollapsed journal stays available without re-reading files.
-  let loadcopts = copts'{rawopts_ = setboolopt "lots" (rawopts_ copts')}
+  -- always load the journal with full lot detail retained and amounts as recorded; the UI
+  -- collapses lots and converts to cost for display (toggled by the L and B keys), so the
+  -- loaded journal stays available without re-reading files.
+  let loadcopts = uiLoadOpts copts'
 
   case True of
     _ | boolopt "quickref" rawopts -> showQuickref
