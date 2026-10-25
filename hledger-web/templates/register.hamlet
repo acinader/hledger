@@ -5,7 +5,7 @@
 
 ^{pagingLinks trs RegisterR qparam modeParams page}
 
-^{registerChartHtml trs j today mchartwidth qparam modeParams transactionFrag chartacct balancelabel items}
+^{registerChartHtml trs j today mchartwidth qparam modeParams chartLink chartacct balancelabel allitems}
 
 <div.table-responsive>
   <table .table.table-condensed>

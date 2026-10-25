@@ -12,8 +12,9 @@ module Hledger.Web.Handler.RegisterR where
 import Data.List (elemIndex, intersperse, nub, partition, sortOn, zip4)
 import Data.Map qualified as M
 import Data.Ord (Down(..))
+import Data.Set qualified as S
 import Data.Text qualified as T
-import Safe (atMay, readMay, tailSafe)
+import Safe (readMay, tailSafe)
 import Text.Blaze.Html5 qualified as H
 import Text.Hamlet (hamletFile)
 
@@ -63,6 +64,7 @@ getRegisterR = do
   sortAmt <- (== Just "amount") <$> lookupGetParam "sort"
   pctOn   <- (== Just "1") <$> lookupGetParam "pct"
   mcalc   <- lookupGetParam "calc"
+  urlrender <- getUrlRenderParams
   pagereq <- pageRequest
   -- How wide to draw the chart: as wide as the page's main column, which
   -- the browser measures and keeps in the chartwidth cookie (hledger.js).
@@ -194,6 +196,14 @@ getRegisterR = do
       -- The brought-forward row is older than every transaction, so it
       -- ends the last page.
       lastpage = pgNumber page >= pgCount page
+      -- The chart is of every matching transaction, not only this page's.
+      -- A point on this page links to its row; one on another page, to that
+      -- page, opened at the row.
+      onpage = S.fromList $ map (tindex . triOrigTransaction) items
+      chartLink t
+        | S.member (tindex t) onpage = frag
+        | otherwise = urlrender RegisterR (qParams qparam ++ modeParams ++ [("txn", T.pack $ show $ tindex t)]) <> frag
+        where frag = T.pack $ '#' : transactionFrag t
       -- The years the search matches in, ignoring any date term in it. A
       -- year's count is by register date, while its page matches date:YYYY
       -- against each posting's date, so a transaction with postings dated in
@@ -273,29 +283,30 @@ decorateLinks = concatMap $ \(acct, (name, comma)) ->
     map (Just acct,) name ++ map (Nothing,) comma
 
 -- | The register's chart: hledger's SVG chart of the running balance (see
--- "Hledger.Cli.Chart"), drawn from this page's rows, as wide as the page's
--- main column was last measured (or by default, 880px). It has a chart per
--- commodity, each on its own scale; with several, a legend chooses the one
--- shown, first the one with the most transactions on the page, and a note
--- says how many more than ten are left out (searching for a commodity,
--- cur:, charts it). Each point links to its row, and dragging across a
--- plot shows the transactions on those dates (registerChartInit, in
--- hledger.js), so each plot gives its date scale, and the chart the
--- register's url without its date terms. Its styles are served by
--- ChartCssR, since the Content-Security-Policy allows no inline styles.
+-- "Hledger.Cli.Chart"), drawn from every matching transaction's row, not
+-- only this page's, as wide as the page's main column was last measured (or
+-- by default, 880px). It has a chart per commodity, each on its own scale;
+-- with several, a legend chooses the one shown, first the one with the most
+-- transactions, and a note says how many more than ten are left out
+-- (searching for a commodity, cur:, charts it). Each point links to its row
+-- (see the link function given), and dragging across a plot shows the
+-- transactions on those dates (registerChartInit, in hledger.js), so each
+-- plot gives its date scale, and the chart the register's url without its
+-- date terms. Its styles are served by ChartCssR, since the
+-- Content-Security-Policy allows no inline styles.
 registerChartHtml ::
-  Translations -> Journal -> Day -> Maybe Int -> Text -> [(Text, Text)] -> (Transaction -> String) -> Text -> Text ->
+  Translations -> Journal -> Day -> Maybe Int -> Text -> [(Text, Text)] -> (Transaction -> Text) -> Text -> Text ->
   AccountTransactionsReport -> HtmlUrl AppRoute
-registerChartHtml trs j today mwidth q modeParams transactionFrag acct balancelabel items = $(hamletFile "templates/chart.hamlet")
+registerChartHtml trs j today mwidth q modeParams pointLink acct balancelabel items = $(hamletFile "templates/chart.hamlet")
  where
    nodatelink = (RegisterR, [("q", t) | let t = T.unwords $ removeDates q, not (T.null t)] ++ modeParams)
-   -- The commodities charted: at most ten, those with the most transactions
-   -- on the page. The balances keep only those before the chart is made.
+   -- The commodities charted: at most ten, those with the most transactions.
+   -- The balances keep only those before the chart is made.
    counts = M.fromListWith (+) [(c, 1 :: Int) | i <- items, c <- nub $ map acommodity $ amounts $ triAmount i]
    charted = take 10 . map fst . sortOn (\(c, n) -> (Down n, c)) $ M.toList counts
    leftout = M.size counts - length charted
    -- the rows oldest first, as the chart's x positions are, each at its date in the register.
-   -- A balance can hold every commodity on the page, an amount one or two, so
+   -- A balance can hold every commodity, an amount one or two, so
    -- only the oldest balance is cut to the charted commodities; each later one
    -- is the one before plus its row's amount, cut, as the register sums them.
    keep = filterMixedAmount ((`elem` charted) . acommodity)
@@ -303,6 +314,8 @@ registerChartHtml trs j today mwidth q modeParams transactionFrag acct balancela
      [] -> []
      (t, ta, s, as, a, b) : later -> scanl next (t, ta, s, as, a, keep b) later
    next (_, _, _, _, _, bal) (t, ta, s, as, a, _) = (t, ta, s, as, a, bal `maPlus` keep a)
+   -- the rows by position, for the points' links, since there can be many
+   rowsat = M.fromDistinctAscList $ zip [0 ..] rows
    regdates = M.fromList [(tindex $ triOrigTransaction i, triDate i) | i <- rows]
    regdate t = M.findWithDefault (tdate t) (tindex t) regdates
    chart = accountTransactionsReportAsChart (journalAccountType j) "" acct regdate rows
@@ -315,7 +328,7 @@ registerChartHtml trs j today mwidth q modeParams transactionFrag acct balancela
      { svgStyles     = False
      , svgWidth      = maybe (svgWidth defaultSvgOptions) (fromIntegral . max 320 . min 2400) mwidth
      , svgPlotHeight = 150
-     , svgPointLink  = \k -> T.pack . ('#' :) . transactionFrag . triOrigTransaction <$> rows `atMay` k
+     , svgPointLink  = \k -> pointLink . triOrigTransaction <$> M.lookup k rowsat
      , svgDateScale  = True
      , svgToday      = Just today
      }

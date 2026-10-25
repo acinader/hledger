@@ -1916,7 +1916,7 @@ hledgerWebTest = do
       htmlAnyContain (rjamounts "sell EEE") "… and 4 more"
       htmlNoneContain (rjamounts "sell EEE") "0 AAA"
 
-    yit "charts the ten commodities with the most transactions on the page, noting the rest (#2784)" $ do
+    yit "charts the ten commodities with the most transactions, noting the rest (#2784)" $ do
       request $ do
         setMethod "GET"
         setUrl RegisterR
@@ -2561,14 +2561,22 @@ hledgerWebTest = do
       bodyContains "amount\">1300</span>"
       bodyContains "amount\">301</span>"
       bodyNotContains "amount\">1301</span>"
-      -- the chart covers this page's rows only: its dates are theirs, and
-      -- its points link to them
+      -- the chart covers every page's rows: its dates are all of theirs, and
+      -- a point on another page links to that page, opened at its row (the
+      -- newest point, last in its column, always has a link)
       let txn i = fromMaybe (error' $ "no txn " ++ show i) $
             find ((== T.pack ("txn " ++ show (i :: Int))) . tdescription) (jtxns pagingj)
-          chartpoint i = "<a href=\"#" ++ transactionFragment pagingj (txn i) ++ "\""
-      bodyContains ("data-d0=\"" ++ show (tdate $ txn 301) ++ "\" data-d1=\"" ++ show (tdate $ txn 1300) ++ "\"")
-      bodyContains (chartpoint 1300)
-      bodyNotContains (chartpoint 1301)
+          rowfrag i = "#" ++ transactionFragment pagingj (txn i)
+      bodyContains ("data-d0=\"" ++ show (tdate $ txn 1) ++ "\" data-d1=\"" ++ show (tdate $ txn 2300) ++ "\"")
+      bodyContains ("<a href=\"" ++ base ++ "/register?account=assets%3Acash&amp;txn=" ++ show (tindex $ txn 2300) ++ rowfrag 2300 ++ "\"")
+      -- on its own page, a point links to its row there
+      request $ do
+        setMethod "GET"
+        setUrl RegisterR
+        addGetParam "account" "assets:cash"
+      statusIs 200
+      bodyContains ("data-d0=\"" ++ show (tdate $ txn 1) ++ "\" data-d1=\"" ++ show (tdate $ txn 2300) ++ "\"")
+      bodyContains ("<a href=\"" ++ rowfrag 2300 ++ "\"")
       -- the years row keeps the account
       bodyContains "/register?q=date%3A2024&amp;account=assets%3Acash\" title=\"Show only 2024\">2024</a>"
       request $ do
