@@ -52,13 +52,13 @@ import Yesod.Form.I18n.Spanish (spanishFormMessage)
 
 import Hledger.Utils.I18n (Translations(..), i18n, langTagCandidates, resolveLang, tr, trc)
 import Hledger
-import Hledger.Cli (CliOpts(..), journalReloadIfChanged)
+import Hledger.Cli (CliOpts(..), journalPrepareLotDetail, journalReloadIfChanged)
 import Hledger.Cli.Commands.Balancesheet (balancesheetSpec)
 import Hledger.Cli.Commands.Balancesheetequity (balancesheetequitySpec)
 import Hledger.Cli.Commands.Cashflow (cashflowSpec)
 import Hledger.Cli.Commands.Incomestatement (incomestatementSpec)
 import Hledger.Cli.CompoundBalanceCommand (CompoundBalanceCommandSpec(..))
-import Hledger.Web.ReportPage (AmountMode(..), accumWord, amountModeOf, intervalPeriodExpr, parseListMode, parseValue, reportLinks, setAmountMode)
+import Hledger.Web.ReportPage (AmountMode(..), accumWord, amountModeOf, intervalPeriodExpr, parseCalc, parseListMode, parseValue, reportLinks, setAmountMode)
 import Hledger.Web.Settings (Extra(..), webmanualurl, widgetFile)
 import Hledger.Web.Settings.StaticFiles
 import Hledger.Web.WebOptions
@@ -87,19 +87,25 @@ data App = App
 -- lot detail (lot subaccounts and synthetic postings) retained - the
 -- journal is always loaded with --lots forced on (see Main.hs) - plus
 -- forms derived from it once per (re)load.
+-- The collapsed forms are made lazily, on a page's first need for them.
 data JournalState = JournalState
-  { jsFull      :: Journal  -- ^ the journal as loaded, lot detail retained
-  , jsCollapsed :: Journal  -- ^ the same with lot detail collapsed, as pages show by default
-  , jsHasLots   :: Bool     -- ^ does the journal use lots at all ? (cached; it scans all postings)
+  { jsFull            :: Journal  -- ^ the journal as loaded, lot detail retained
+  , jsCollapsed       :: Journal  -- ^ the same with lot detail collapsed, as pages show by default
+  , jsCollapsedAtCost :: Journal  -- ^ collapsed after converting to cost basis, for pages at cost
+  , jsCollapsedGain   :: Journal  -- ^ collapsed after setting lot costs to their basis, for gains
+  , jsHasLots         :: Bool     -- ^ does the journal use lots at all ? (cached; it scans all postings)
   }
 
 -- | Make the journal state for a newly (re)loaded journal.
 mkJournalState :: Journal -> JournalState
 mkJournalState j = JournalState
-  { jsFull      = j
-  , jsCollapsed = journalCollapseLotDetail j
-  , jsHasLots   = journalHasLotFeatures j
+  { jsFull            = j
+  , jsCollapsed       = collapse defreportopts
+  , jsCollapsedAtCost = collapse defreportopts{conversionop_ = Just ToCost}
+  , jsCollapsedGain   = collapse defreportopts{balancecalc_ = CalcGain}
+  , jsHasLots         = journalHasLotFeatures j
   }
+  where collapse ropts = journalPrepareLotDetail ropts False j
 
 
 -- This is where we define all of the routes in our application. For a full
@@ -434,11 +440,19 @@ getViewData = do
                 today
 
   -- With lots=1, show lot detail (lot subaccounts and per-lot postings),
-  -- which is collapsed by default.
+  -- which is collapsed by default. Collapsed, a page at cost or showing
+  -- gains needs the lot postings' cost bases kept through the collapse:
+  -- the value parameter (or startup's options) and calc parameter say so.
   lotsShown <- (== Just "1") <$> lookupGetParam "lots"
+  mvalue <- either (const Nothing) id . parseValue <$> lookupGetParam "value"
+  gain <- either (const False) (== CalcGain) . parseCalc <$> lookupGetParam "calc"
   let jHasLots = jsHasLots js
       jfull = jsFull js
-      j = if lotsShown then jfull else jsCollapsed js
+      atCost = conversionop_ (maybe id setAmountMode mvalue _rsReportOpts) == Just ToCost
+      j | lotsShown = jfull
+        | gain      = jsCollapsedGain js
+        | atCost    = jsCollapsedAtCost js
+        | otherwise = jsCollapsed js
 
   -- Get the query specified by the q request parameter, or no query if this fails.
   qparam <- fromMaybe "" <$> lookupGetParam "q"

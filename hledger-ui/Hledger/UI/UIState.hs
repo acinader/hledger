@@ -59,6 +59,7 @@ import Safe
 
 import Hledger
 import Hledger.Cli.CliOptions
+import Hledger.Cli.Utils (journalPrepareLotDetail)
 import Hledger.UI.UITypes
 import Hledger.UI.UIOptions (UIOpts(uoCliOpts))
 import Hledger.UI.UIScreens (screenUpdate)
@@ -81,14 +82,15 @@ uiState uopts j prevscrs scr = UIState {
   }
 
 -- | Derive the display journal (what screens show) from the uncollapsed journal:
--- collapse lot detail unless the lots toggle (--lots) is on. Mirrors the CLI's
+-- prepare lot detail for the current options (converted to cost basis when B is on),
+-- collapsing it unless the lots toggle (--lots) is on. Mirrors the CLI's
 -- maybeCollapseLotDetail, so UI and CLI agree (and --ignore-lots is honored).
 uiDisplayJournal :: UIOpts -> Journal -> Journal
-uiDisplayJournal uopts
-  | boolopt "lots" ro        = id
-  | boolopt "ignore-lots" ro = id
-  | otherwise                = journalCollapseLotDetail
-  where ro = rawopts_ $ uoCliOpts uopts
+uiDisplayJournal uopts = journalPrepareLotDetail (_rsReportOpts $ reportspec_ copts) keeplots
+  where
+    copts = uoCliOpts uopts
+    ro = rawopts_ copts
+    keeplots = boolopt "lots" ro || boolopt "ignore-lots" ro
 
 -- | Toggle display of lot detail (lot subaccounts and synthetic lot postings), like the
 -- CLI's --lots flag. This only flips the option; 'regenerateScreens' then re-derives the

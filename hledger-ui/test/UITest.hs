@@ -139,6 +139,15 @@ tests = testGroup "hledger-ui"
           (hasText "assets:stocks transactions" && not (hasText "{2026-01-01"))
         assertBool "the register should show the transaction, selected"
           (hasText "buy" && hasText "(1/1)")
+  , testCase "B converts a sale from several lots at the lots' cost, with lots collapsed" $
+      withJournalFile lotSaleFixture $ \path -> do
+        uopts <- withDay (fromGregorian 2026 6 1) <$> uiOptsForArgs ["-f", path, "--all"]
+        j <- readJournalFile' path
+        (_, frames) <- driveUI uopts j [key 'B']
+        let brokerLines = filter (T.isInfixOf "broker") $ renderText region (last frames)
+        -- the 5 AAA left cost $100 (the sale's $30 price would give $-150)
+        assertBool ("the broker should show its lots' cost, but shows: " <> show brokerLines)
+          (any (T.isInfixOf "$100") brokerLines)
   , testCase "the last screen-selecting flag wins" $
       withJournalFile fixture $ \path -> do
         j <- readJournalFile' path
@@ -207,6 +216,24 @@ lotsFixture = T.unlines
   , "2026-01-01 buy"
   , "    assets:stocks    10 AAPL {$50} @ $50"
   , "    assets:cash     $-500"
+  ]
+
+-- | Two lots of AAA, and a sale taking from both (FIFO).
+lotSaleFixture :: Text
+lotSaleFixture = T.unlines
+  [ "commodity AAA  ; lots:"
+  , ""
+  , "2026-01-01 buy"
+  , "    assets:broker    10 AAA @ $10"
+  , "    assets:cash"
+  , ""
+  , "2026-02-01 buy"
+  , "    assets:broker    10 AAA @ $20"
+  , "    assets:cash"
+  , ""
+  , "2026-03-01 sell"
+  , "    assets:broker   -15 AAA @ $30"
+  , "    assets:cash      $450"
   ]
 
 withJournalFile :: Text -> (FilePath -> IO a) -> IO a

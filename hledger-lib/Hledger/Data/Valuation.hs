@@ -373,7 +373,7 @@ amountValueAtDate priceoracle styles mto d a =
 -- cost basis where known (lot postings), else transacted cost, regardless of
 -- direction. (Summing postings merges amounts and can drop their bases, so
 -- for --gain reports, lot postings' transacted costs are first replaced by
--- their basis costs; see Hledger.Cli.Utils.maybeSetCostsToBasisForGain.)
+-- their basis costs; see Hledger.Cli.Utils.journalPrepareLotDetail.)
 -- For a non-lot disposal posting recording its sale price with @,
 -- the negative quantity flips its cost contribution from acquisition cost to
 -- negated sale proceeds, so the result accumulates realised gain alongside

@@ -19,6 +19,7 @@ module Hledger.Cli.Utils
      withTitle,
      writeOutputWithTitle,
      journalTransform,
+     journalPrepareLotDetail,
      journalReload,
      journalReloadIfChanged,
      journalFileIsNewer,
@@ -165,7 +166,8 @@ withPossibleJournal opts cmd = do
 -- | Apply some journal transformations, if enabled by options, that should happen late.
 -- These happen after parsing, finalising the journal, strict checks, and .latest filtering/updating,
 -- but before report calculation. They are, in processing order:
--- --pivot, --anonymise error message, --obfuscate, and (when --lots is off) collapsing lot detail.
+-- --pivot, --anonymise error message, --obfuscate, and preparing lot detail
+-- (converting to cost basis for -B or --gain, then, when --lots is off, collapsing it).
 --
 -- Why not do these in journalFinalise ?
 -- That step is supposed to check the data's intrinsic correctness, regardless of view options;
@@ -176,43 +178,49 @@ journalTransform opts =
       maybePivot opts
   <&> maybeWarnAboutAnon opts
   <&> maybeObfuscate opts
-  <&> maybeConvertToCostBasis opts
-  <&> maybeSetCostsToBasisForGain opts
   <&> maybeCollapseLotDetail opts
 
--- | With -B/--value=cost, convert amounts to cost basis now, before lot
--- detail is collapsed: collapsing merges a multi-lot disposal's per-lot
--- fragments (which may have different bases) into one amount with an
--- unspecified basis, after which the basis values would be lost. The later
--- per-report cost conversion is then a no-op for these amounts.
-maybeConvertToCostBasis :: CliOpts -> Journal -> Journal
-maybeConvertToCostBasis opts
-  | conversionop_ (_rsReportOpts $ reportspec_ opts) == Just ToCost = journalToCost ToCost
-  | otherwise = id
-
--- | With --gain, replace lot postings' transacted costs with their cost basis
--- now, before lot detail is collapsed, for the same reason: the gain
--- calculation subtracts cost from summed account balances, and summing
--- merges amounts by commodity and transacted cost (dropping differing
--- bases), so the basis is carried in the transacted cost, which sums
--- correctly. Then gain is value minus cost basis for lot postings however
--- their costs were written (@ or @@), as it already was for -B (#2751).
-maybeSetCostsToBasisForGain :: CliOpts -> Journal -> Journal
-maybeSetCostsToBasisForGain opts
-  | balancecalc_ (_rsReportOpts $ reportspec_ opts) == CalcGain = journalMapPostingAmounts (mapMixedAmount amountSetCostToBasis)
-  | otherwise = id
-
--- | Collapse lot-tracking detail (strip lot subaccounts, drop synthetic lot-processing
--- postings) so reports show the user's original form. Skipped when --lots is set,
--- or when --ignore-lots/-I is set (in which case leaf-@{...}@ accounts are
--- treated as ordinary account names).
+-- | Prepare lot detail for the report options (see 'journalPrepareLotDetail'),
+-- collapsing it so reports show the user's original form. Collapsing is skipped
+-- when --lots is set, or when --ignore-lots/-I is set (in which case leaf-@{...}@
+-- accounts are treated as ordinary account names).
 maybeCollapseLotDetail :: CliOpts -> Journal -> Journal
-maybeCollapseLotDetail opts
-  | boolopt "lots" rawopts        = id
-  | boolopt "ignore-lots" rawopts = id
-  | command_ opts == "holdings"   = id  -- holdings always needs lot detail; it aggregates lots itself
-  | otherwise                     = journalCollapseLotDetail
-  where rawopts = rawopts_ opts
+maybeCollapseLotDetail opts = journalPrepareLotDetail (_rsReportOpts $ reportspec_ opts) keeplots
+  where
+    rawopts = rawopts_ opts
+    keeplots = boolopt "lots" rawopts
+            || boolopt "ignore-lots" rawopts
+            || command_ opts == "holdings"  -- holdings always needs lot detail; it aggregates lots itself
+
+-- | Prepare a journal's lot detail for reports with these options: convert lot
+-- postings to their cost basis where -B or --gain needs it, then, unless
+-- keeplots is true, collapse lot detail ('journalCollapseLotDetail').
+-- hledger, hledger-ui, and hledger-web all display lots this way, so that
+-- they report the same amounts.
+journalPrepareLotDetail :: ReportOpts -> Bool -> Journal -> Journal
+journalPrepareLotDetail ropts keeplots =
+    (if keeplots then id else journalCollapseLotDetail)
+  . setCostsToBasisForGain
+  . convertToCostBasis
+  where
+    -- With -B/--value=cost, convert amounts to cost basis now, before lot
+    -- detail is collapsed: collapsing merges a multi-lot disposal's per-lot
+    -- fragments (which may have different bases) into one amount with an
+    -- unspecified basis, after which the basis values would be lost. The later
+    -- per-report cost conversion is then a no-op for these amounts.
+    convertToCostBasis
+      | conversionop_ ropts == Just ToCost = journalToCost ToCost
+      | otherwise = id
+    -- With --gain, replace lot postings' transacted costs with their cost basis
+    -- now, before lot detail is collapsed, for the same reason: the gain
+    -- calculation subtracts cost from summed account balances, and summing
+    -- merges amounts by commodity and transacted cost (dropping differing
+    -- bases), so the basis is carried in the transacted cost, which sums
+    -- correctly. Then gain is value minus cost basis for lot postings however
+    -- their costs were written (@ or @@), as it already was for -B (#2751).
+    setCostsToBasisForGain
+      | balancecalc_ ropts == CalcGain = journalMapPostingAmounts (mapMixedAmount amountSetCostToBasis)
+      | otherwise = id
 
 -- | If the --pivot option is present, replace the journal's account names by specified other values.
 maybePivot :: CliOpts -> Journal -> Journal

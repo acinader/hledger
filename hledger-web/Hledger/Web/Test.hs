@@ -549,6 +549,43 @@ hledgerWebTest = do
       get HoldingsR
       statusIs 200
 
+  -- A sale taking from two lots (FIFO): the 5 AAA left cost $100, and
+  -- are worth $200.
+  msj <- fmap (either error' id) . runExceptT . journalFinalise liopts "lotsale.journal" "" =<<
+          readJournal'' (T.pack $ unlines  -- PARTIAL: readJournal'' should not fail
+            ["commodity AAA  ; lots:"
+            ,"P 2026-04-01 AAA $40"
+            ,""
+            ,"2026-01-01 buy"
+            ,"    assets:broker    10 AAA @ $10"
+            ,"    assets:cash"
+            ,""
+            ,"2026-02-01 buy"
+            ,"    assets:broker    10 AAA @ $20"
+            ,"    assets:cash"
+            ,""
+            ,"2026-03-01 sell"
+            ,"    assets:broker   -15 AAA @ $30"
+            ,"    assets:cash      $450"
+            ])
+  runTests "hledger-web lots collapsed" [] msj $ do
+
+    -- At the sale's $30 price instead, the broker would show $-150 at
+    -- cost, and a $350 gain.
+    yit "converts a sale from several lots at the lots' cost, at cost and for gains" $ do
+      request $ do
+        setMethod "GET"
+        setUrl BalancesheetR
+        addGetParam "value" "cost"
+      statusIs 200
+      htmlAnyContain "#main-content tbody td.amount" "$100"
+      request $ do
+        setMethod "GET"
+        setUrl BalancesheetR
+        addGetParam "calc" "gain"
+      statusIs 200
+      htmlAnyContain "#main-content tbody td.amount" "$100"
+
   -- Submitting an unbalanced transaction produces an error message that
   -- echoes the entry (account names, amounts). Those values must be rendered
   -- as text, not raw html. Note this echo happens on the FormFailure path,
