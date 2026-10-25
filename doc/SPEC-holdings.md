@@ -251,7 +251,7 @@ Holdings on 2026-03-31
 ## Implementation notes
 
 - The holdings command receives the journal with lot detail uncollapsed,
-  regardless of --lots (see maybeCollapseLotDetail in Hledger.Cli.Utils);
+  regardless of --lots (see maybePrepareLotDetail in Hledger.Cli.Utils);
   it aggregates lots itself.
 - Rows come from a single-period, end-balances (Historical) multiBalanceReport:
   run on the lot-detailed journal with --lots (rows are lot subaccounts),

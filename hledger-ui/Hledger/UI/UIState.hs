@@ -84,7 +84,7 @@ uiState uopts j prevscrs scr = UIState {
 -- | Derive the display journal (what screens show) from the uncollapsed journal:
 -- prepare lot detail for the current options (converted to cost basis when B is on),
 -- collapsing it unless the lots toggle (--lots) is on. Mirrors the CLI's
--- maybeCollapseLotDetail, so UI and CLI agree (and --ignore-lots is honored).
+-- maybePrepareLotDetail, so UI and CLI agree (and --ignore-lots is honored).
 uiDisplayJournal :: UIOpts -> Journal -> Journal
 uiDisplayJournal uopts = journalPrepareLotDetail (_rsReportOpts $ reportspec_ copts) keeplots
   where

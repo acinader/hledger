@@ -257,7 +257,7 @@ data HoldingsReport = HoldingsReport {
 --
 -- The journal must have its lot detail (lot subaccounts and synthetic
 -- postings) uncollapsed, as the holdings command receives it
--- (see maybeCollapseLotDetail); this report aggregates lots itself.
+-- (see maybePrepareLotDetail); this report aggregates lots itself.
 -- A --value=then valuation strategy is not supported; callers reject it.
 holdingsReport :: HoldingsReportOpts -> ReportSpec -> Journal -> HoldingsReport
 holdingsReport hro rspec@ReportSpec{_rsReportOpts=ropts'} j'
@@ -938,7 +938,7 @@ flatHoldingsReport HoldingsReportOpts{hroLots=showlots, hroRounding=rounding}
 --
 -- This command receives the journal with lot detail (lot subaccounts and
 -- synthetic postings) uncollapsed, regardless of --lots
--- (see maybeCollapseLotDetail); holdingsReport aggregates lots itself.
+-- (see maybePrepareLotDetail); holdingsReport aggregates lots itself.
 holdings :: CliOpts -> Journal -> IO ()
 holdings opts@CliOpts{rawopts_=rawopts, reportspec_=rspec@ReportSpec{_rsReportOpts=ropts}} j = do
   if (case value_ ropts of Just (AtThen _) -> True; _ -> False)

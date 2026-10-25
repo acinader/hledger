@@ -178,14 +178,14 @@ journalTransform opts =
       maybePivot opts
   <&> maybeWarnAboutAnon opts
   <&> maybeObfuscate opts
-  <&> maybeCollapseLotDetail opts
+  <&> maybePrepareLotDetail opts
 
 -- | Prepare lot detail for the report options (see 'journalPrepareLotDetail'),
 -- collapsing it so reports show the user's original form. Collapsing is skipped
 -- when --lots is set, or when --ignore-lots/-I is set (in which case leaf-@{...}@
 -- accounts are treated as ordinary account names).
-maybeCollapseLotDetail :: CliOpts -> Journal -> Journal
-maybeCollapseLotDetail opts = journalPrepareLotDetail (_rsReportOpts $ reportspec_ opts) keeplots
+maybePrepareLotDetail :: CliOpts -> Journal -> Journal
+maybePrepareLotDetail opts = journalPrepareLotDetail (_rsReportOpts $ reportspec_ opts) keeplots
   where
     rawopts = rawopts_ opts
     keeplots = boolopt "lots" rawopts

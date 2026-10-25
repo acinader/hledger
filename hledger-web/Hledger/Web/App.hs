@@ -442,7 +442,8 @@ getViewData = do
   -- With lots=1, show lot detail (lot subaccounts and per-lot postings),
   -- which is collapsed by default. Collapsed, a page at cost or showing
   -- gains needs the lot postings' cost bases kept through the collapse:
-  -- the value parameter (or startup's options) and calc parameter say so.
+  -- the value and calc parameters say so (startup's options become url
+  -- parameters, see startupUrlState).
   lotsShown <- (== Just "1") <$> lookupGetParam "lots"
   mvalue <- either (const Nothing) id . parseValue <$> lookupGetParam "value"
   gain <- either (const False) (== CalcGain) . parseCalc <$> lookupGetParam "calc"
