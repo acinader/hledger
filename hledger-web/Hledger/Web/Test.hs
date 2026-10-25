@@ -1382,6 +1382,30 @@ hledgerWebTest = do
       statusIs 200
       bodyContains ("<a href=\"" ++ base ++ "/register?q=expenses\" title=\"Show the transactions that make up this total\">")
 
+  -- An entry with comments, tags among them: before it, on its first line,
+  -- on a line of their own, and on a posting.
+  commentsj <- fmap (either error' id) . runExceptT . journalFinalise biopts "comments.journal" "" =<<
+          readJournal'' (T.pack $ unlines  -- PARTIAL: readJournal'' should not fail
+            ["; before"
+            ,"2025-03-01 groceries  ; trip: market"
+            ,"    ; receipt kept"
+            ,"    expenses:food    5  ; item: bread"
+            ,"    assets:cash"])
+  runTests "hledger-web entry tooltips" [] commentsj $ do
+
+    yit "leaves comments, and so tags, out of a register row's entry, which a journal row's keeps" $ do
+      get JournalR
+      statusIs 200
+      bodyContains "data-entry=\"; before\n2025-03-01 groceries  ; trip: market\n    ; receipt kept\n"
+      bodyContains "; item: bread"
+      get RegisterR
+      statusIs 200
+      bodyContains "data-entry=\"2025-03-01 groceries\n    expenses:food "
+      bodyNotContains "; before"
+      bodyNotContains "trip: market"
+      bodyNotContains "receipt kept"
+      bodyNotContains "item: bread"
+
   -- The register: a period's transactions, with a running total from zero,
   -- or with accum=historical, the account's balance from before the period.
   runTests "hledger-web register page" [] bj $ do

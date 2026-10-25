@@ -233,6 +233,10 @@ getRegisterR = do
           ((if secondary then "date2:.." else "date:..") <> showDate start) : removeDates qparam)] ++
           removeAttributes ["accum"] modeParams)
       transactionFrag = transactionFragment j
+      -- A row's entry, for its tooltip: without its comments, and so its
+      -- tags, which can make it long; the journal page's rows show them.
+      rowEntry t = showTransaction t{tprecedingcomment = "", tcomment = "",
+                                     tpostings = map (\p -> p{pcomment = ""}) $ tpostings t}
   defaultLayout $ do
     -- TRANSLATORS: the browser tab title of this page.
     setTitleI (HMsg "register - hledger-web")
