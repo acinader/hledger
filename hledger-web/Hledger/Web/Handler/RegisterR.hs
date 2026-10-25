@@ -9,7 +9,7 @@
 
 module Hledger.Web.Handler.RegisterR where
 
-import Data.List (elemIndex, intersperse, nub, partition, sortOn, zip4)
+import Data.List (intersperse, nub, partition, sortOn, zip4)
 import Data.Map qualified as M
 import Data.Ord (Down(..))
 import Data.Set qualified as S
@@ -22,7 +22,7 @@ import Hledger.Utils.I18n (Translations, tr, trc, trf)
 import Hledger
 import Hledger.Cli.Chart (accountTransactionsReportAsChart)
 import Hledger.Cli.CliOptions
-import Hledger.Write.Chart (Chart(..), Panel(..))
+import Hledger.Write.Chart (Chart(..))
 import Hledger.Write.Chart.Svg (SvgOptions(..), chartSvgMarkupWith, defaultSvgOptions)
 import Hledger.Web.Import
 import Hledger.Web.Paging
@@ -314,17 +314,33 @@ registerChartHtml trs j today mwidth q modeParams pointLink acct balancelabel it
      [] -> []
      (t, ta, s, as, a, b) : later -> scanl next (t, ta, s, as, a, keep b) later
    next (_, _, _, _, _, bal) (t, ta, s, as, a, _) = (t, ta, s, as, a, bal `maPlus` keep a)
-   -- the rows by position, for the points' links, since there can be many
-   rowsat = M.fromDistinctAscList $ zip [0 ..] rows
    regdates = M.fromList [(tindex $ triOrigTransaction i, triDate i) | i <- rows]
    regdate t = M.findWithDefault (tdate t) (tindex t) regdates
-   chart = accountTransactionsReportAsChart (journalAccountType j) "" acct regdate rows
-   panels = sortOn (\p -> elemIndex (acommodity $ pnUnit p) charted) $ chPanels chart
-   -- the legend's entries: each panel's number, the panel, its commodity's name, and whether it is shown at first
-   legend = zip4 [0 :: Int ..] panels (map commodityName panels) (True : repeat False)
+   -- A chart for each commodity, with its one panel, and the rows its points
+   -- are at, by position, for their links. It is drawn from the rows where
+   -- the commodity's balance changes, and the first and last: the rest add
+   -- nothing to its line, and drawing them all is slow when there are many
+   -- rows and commodities.
+   charts =
+     [ (c, chart, M.fromDistinctAscList $ zip [0 ..] crows)
+     | c <- charted
+     , let crows = [(t, ta, s, as, a, filterMixedAmount ((== c) . acommodity) b) | (t, ta, s, as, a, b) <- changesIn c]
+           chart = accountTransactionsReportAsChart (journalAccountType j) "" acct regdate crows
+     , not $ null $ chPanels chart
+     ]
+   changesIn c = case rows of
+     [] -> []
+     r : later -> r : go (qty r) later
+     where
+       qty r = sum [aquantity a | a <- amountsRaw $ triBalance r, acommodity a == c]
+       go _ [] = []
+       go _ [r] = [r]
+       go n (r : more) = let n' = qty r in if n' == n then go n more else r : go n' more
+   -- the legend's entries: each chart's number, the chart, its commodity's name, and whether it is shown at first
+   legend = zip4 [0 :: Int ..] charts (map commodityName charts) (True : repeat False)
    -- TRANSLATORS: the register chart's legend entry for amounts written without a commodity symbol.
-   commodityName p = let c = acommodity (pnUnit p) in if T.null c then tr trs "no symbol" else c
-   svgopts = defaultSvgOptions
+   commodityName (c, _, _) = if T.null c then tr trs "no symbol" else c
+   svgopts rowsat = defaultSvgOptions
      { svgStyles     = False
      , svgWidth      = maybe (svgWidth defaultSvgOptions) (fromIntegral . max 320 . min 2400) mwidth
      , svgPlotHeight = 150
@@ -332,8 +348,6 @@ registerChartHtml trs j today mwidth q modeParams pointLink acct balancelabel it
      , svgDateScale  = True
      , svgToday      = Just today
      }
-   -- some panels as SVG, named for screen readers by the balance and their commodities
-   svg ps = chartSvgMarkupWith svgopts chart{chPanels = ps} H.! H.customAttribute "aria-label" (H.toValue $ label ps)
-   label ps = case filter (not . T.null) $ map (acommodity . pnUnit) ps of
-     [] -> balancelabel
-     cs -> balancelabel <> ": " <> T.intercalate ", " cs
+   -- a commodity's chart as SVG, named for screen readers by the balance and the commodity
+   svg (c, chart, rowsat) = chartSvgMarkupWith (svgopts rowsat) chart H.! H.customAttribute "aria-label" (H.toValue label)
+     where label = if T.null c then balancelabel else balancelabel <> ": " <> c
